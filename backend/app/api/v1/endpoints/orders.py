@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException, Header, Depends
+from fastapi import APIRouter, HTTPException, Header, Depends, BackgroundTasks
 from typing import List
 from app.schemas.order import Order, OrderCreate
 from app.services.supabase import supabase
 from app.core.jwt import verify_token
+from app.core.notifications import send_order_confirmation_email
 
 router = APIRouter()
 
@@ -36,7 +37,7 @@ def get_current_user(authorization: str = Header(None)):
         raise HTTPException(status_code=401, detail=str(e))
 
 @router.post("/", response_model=Order)
-def create_order(order: OrderCreate, user = Depends(get_current_user)):
+def create_order(order: OrderCreate, background_tasks: BackgroundTasks, user = Depends(get_current_user)):
     try:
         print(f"Creating order for user: {user['id']}")
         print(f"Order data: {order}")
@@ -71,6 +72,30 @@ def create_order(order: OrderCreate, user = Depends(get_current_user)):
             print(f"Inserting order items: {items_data}")
             supabase.table("order_items").insert(items_data).execute()
             
+        # Send confirmation email in background
+        # Send confirmation email in background
+        try:
+            # Fetch product details for email
+            email_items = []
+            for item in order.items:
+                prod_res = supabase.table("products").select("name").eq("id", str(item.product_id)).execute()
+                prod_name = prod_res.data[0]["name"] if prod_res.data else "Unknown Product"
+                email_items.append({
+                    "name": prod_name,
+                    "quantity": item.quantity,
+                    "price": item.price_at_purchase
+                })
+
+            background_tasks.add_task(
+                send_order_confirmation_email,
+                email_to=user["email"],
+                order_id=new_order["id"],
+                total_amount=new_order["total_amount"],
+                items=email_items
+            )
+        except Exception as e:
+            print(f"Failed to queue email task: {e}")
+
         return new_order
     except Exception as e:
         print(f"Error creating order: {e}")
@@ -81,7 +106,7 @@ def create_order(order: OrderCreate, user = Depends(get_current_user)):
 @router.get("/", response_model=List[Order])
 def read_orders(user = Depends(get_current_user)):
     try:
-        response = supabase.table("orders").select("*, order_items(*)").eq("user_id", user["id"]).execute()
+        response = supabase.table("orders").select("*, order_items(*, products(name, image_url))").eq("user_id", user["id"]).order("created_at", desc=True).execute()
         return response.data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ShoppingCart, User, Search, Menu, LogOut, UserCircle } from 'lucide-react';
+import { ShoppingCart, User, Search, Menu, LogOut, UserCircle, ShoppingBag } from 'lucide-react';
 import logo from '../../assets/logo.png';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
@@ -89,6 +89,15 @@ const Navbar = () => {
                     >
                       <UserCircle className="h-4 w-4" />
                       <span>My Account</span>
+                    </Link>
+
+                    <Link
+                      to="/orders"
+                      onClick={() => setShowDropdown(false)}
+                      className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <ShoppingBag className="h-4 w-4" />
+                      <span>Order History</span>
                     </Link>
 
                     <button

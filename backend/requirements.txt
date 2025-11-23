@@ -7,3 +7,4 @@ pydantic-settings
 pydantic[email]
 passlib[argon2]
 python-jose[cryptography]
+fastapi-mail

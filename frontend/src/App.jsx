@@ -10,6 +10,7 @@ import Checkout from './pages/Checkout';
 import Account from './pages/Account';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import OrderHistory from './pages/OrderHistory';
 import Cart from './components/features/Cart';
 
 class ErrorBoundary extends React.Component {
@@ -73,6 +74,7 @@ function App() {
                 <Route path="/account" element={<Account />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/signup" element={<Signup />} />
+                <Route path="/orders" element={<OrderHistory />} />
               </Routes>
             </Layout>
           </Router>

@@ -11,9 +11,14 @@ class OrderItemBase(BaseModel):
 class OrderItemCreate(OrderItemBase):
     pass
 
+class ProductInfo(BaseModel):
+    name: str
+    image_url: Optional[str] = None
+
 class OrderItem(OrderItemBase):
     id: UUID
     order_id: UUID
+    products: Optional[ProductInfo] = None
 
     class Config:
         from_attributes = True
@@ -30,7 +35,7 @@ class Order(OrderBase):
     id: UUID
     user_id: UUID
     created_at: datetime
-    items: Optional[List[OrderItem]] = []
+    order_items: Optional[List[OrderItem]] = []
 
     class Config:
         from_attributes = True

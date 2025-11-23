@@ -93,3 +93,17 @@ export const createOrder = async (orderData, token) => {
     }
     return response.json();
 };
+
+export const fetchOrders = async (token) => {
+    const response = await fetch(`${API_URL}/orders/`, {
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to fetch orders');
+    }
+    return response.json();
+};

@@ -90,7 +90,14 @@ const Account = () => {
                             </div>
 
                             {/* Edit/Save Buttons */}
-                            <div>
+                            <div className="flex items-center space-x-3">
+                                <button
+                                    onClick={() => navigate('/orders')}
+                                    className="flex items-center space-x-2 bg-white/10 text-white px-4 py-2 rounded-lg hover:bg-white/20 transition-colors"
+                                >
+                                    <Calendar className="h-4 w-4" />
+                                    <span>Order History</span>
+                                </button>
                                 {!isEditing ? (
                                     <button
                                         onClick={() => setIsEditing(true)}
