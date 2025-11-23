@@ -88,7 +88,7 @@ const ProductDetail = () => {
                             </div>
 
                             <div className="text-3xl font-bold text-gray-900 mb-6">
-                                ${product.price.toFixed(2)}
+                                ₹{product.price.toFixed(2)}
                             </div>
 
                             <p className="text-gray-600 mb-8 leading-relaxed">{product.description}</p>
@@ -154,7 +154,7 @@ const ProductDetail = () => {
                                     <li>• Premium quality materials</li>
                                     <li>• Comfortable fit</li>
                                     <li>• Easy care instructions</li>
-                                    <li>• Free shipping on orders over $100</li>
+                                    <li>• Free shipping on orders over ₹100</li>
                                 </ul>
                             </div>
                         </div>

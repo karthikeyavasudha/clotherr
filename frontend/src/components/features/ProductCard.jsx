@@ -26,7 +26,7 @@ const ProductCard = ({ product }) => {
                         </h3>
                         <p className="mt-1 text-sm text-gray-500">{product.category || 'Clothing'}</p>
                     </div>
-                    <p className="text-sm font-bold text-gray-900">${product.price}</p>
+                    <p className="text-sm font-bold text-gray-900">₹{product.price}</p>
                 </div>
             </div>
         </div>
