@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchOrders } from '../services/api';
-import { Package, Calendar, ChevronRight, ShoppingBag } from 'lucide-react';
+import { Package, Calendar, ChevronRight, ShoppingBag, Download, Eye } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const OrderHistory = () => {
     const [orders, setOrders] = useState([]);
@@ -10,13 +12,99 @@ const OrderHistory = () => {
     const [error, setError] = useState(null);
     const [expandedOrders, setExpandedOrders] = useState({});
     const navigate = useNavigate();
-    const { token } = useAuth();
+    const { token, user } = useAuth();
 
     const toggleOrder = (orderId) => {
         setExpandedOrders(prev => ({
             ...prev,
             [orderId]: !prev[orderId]
         }));
+    };
+
+    const generateInvoiceDoc = (order) => {
+        try {
+            const doc = new jsPDF();
+
+            // Header
+            doc.setFontSize(20);
+            doc.text('INVOICE', 105, 20, { align: 'center' });
+
+            doc.setFontSize(10);
+            doc.text('Clotherr Inc.', 105, 25, { align: 'center' });
+            doc.text('support@clotherr.online', 105, 30, { align: 'center' });
+
+            // Order Details
+            doc.setFontSize(12);
+            doc.text(`Order ID: ${order.id}`, 14, 45);
+            doc.text(`Date: ${new Date(order.created_at).toLocaleDateString()}`, 14, 52);
+            doc.text(`Status: ${order.status.toUpperCase()}`, 14, 59);
+
+            // Customer Details
+            doc.text('Bill To:', 140, 45);
+            doc.setFontSize(10);
+            doc.text(user?.full_name || 'Customer', 140, 50);
+            doc.text(user?.email || '', 140, 55);
+
+            // Split address for better formatting
+            const addressLines = doc.splitTextToSize(String(order.shipping_address || ''), 60);
+            doc.text(addressLines, 140, 60);
+
+            // Items Table
+            const tableColumn = ["Product", "Quantity", "Price", "Total"];
+            const tableRows = [];
+
+            order.order_items.forEach(item => {
+                const productData = [
+                    item.products?.name || 'Unknown Product',
+                    item.quantity,
+                    `Rs. ${Number(item.price_at_purchase).toFixed(2)}`,
+                    `Rs. ${(item.quantity * item.price_at_purchase).toFixed(2)}`,
+                ];
+                tableRows.push(productData);
+            });
+
+            autoTable(doc, {
+                head: [tableColumn],
+                body: tableRows,
+                startY: 80,
+                theme: 'grid',
+                headStyles: { fillColor: [0, 0, 0] },
+                styles: { fontSize: 10 },
+            });
+
+            // Total
+            const finalY = doc.lastAutoTable.finalY || 80;
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'bold');
+            doc.text(`Total Amount: Rs. ${Number(order.total_amount).toFixed(2)}`, 140, finalY + 15);
+
+            // Footer
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.text('Thank you for shopping with Clotherr!', 105, 280, { align: 'center' });
+
+            return doc;
+        } catch (err) {
+            console.error("Invoice generation failed:", err);
+            alert("Failed to generate invoice. Please try again.");
+            return null;
+        }
+    };
+
+    const handleDownloadInvoice = (e, order) => {
+        e.stopPropagation();
+        const doc = generateInvoiceDoc(order);
+        if (doc) {
+            doc.save(`Invoice_${order.id.slice(0, 8)}.pdf`);
+        }
+    };
+
+    const handleViewInvoice = (e, order) => {
+        e.stopPropagation();
+        const doc = generateInvoiceDoc(order);
+        if (doc) {
+            window.open(doc.output('bloburl'), '_blank');
+        }
     };
 
     useEffect(() => {
@@ -103,6 +191,24 @@ const OrderHistory = () => {
                                             {order.status}
                                         </span>
                                         <p className="text-lg font-bold text-gray-900">₹{order.total_amount.toFixed(2)}</p>
+
+                                        <div className="flex items-center">
+                                            <button
+                                                onClick={(e) => handleViewInvoice(e, order)}
+                                                className="p-2 text-gray-500 hover:text-black transition-colors"
+                                                title="View Invoice"
+                                            >
+                                                <Eye className="h-5 w-5" />
+                                            </button>
+                                            <button
+                                                onClick={(e) => handleDownloadInvoice(e, order)}
+                                                className="p-2 text-gray-500 hover:text-black transition-colors"
+                                                title="Download Invoice"
+                                            >
+                                                <Download className="h-5 w-5" />
+                                            </button>
+                                        </div>
+
                                         <ChevronRight
                                             className={`h-5 w-5 text-gray-400 transition-transform duration-200 ${expandedOrders[order.id] ? 'transform rotate-90' : ''}`}
                                         />
