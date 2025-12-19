@@ -12,6 +12,15 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import OrderHistory from './pages/OrderHistory';
 import Cart from './components/features/Cart';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
+
+// Admin pages
+import AdminLogin from './pages/admin/AdminLogin';
+import Dashboard from './pages/admin/Dashboard';
+import Products from './pages/admin/Products';
+import Orders from './pages/admin/Orders';
+import Customers from './pages/admin/Customers';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -48,7 +57,13 @@ class ErrorBoundary extends React.Component {
 
 const Layout = ({ children }) => {
   const location = useLocation();
-  const isAuthPage = ['/login', '/signup'].includes(location.pathname);
+  const isAuthPage = ['/login', '/signup', '/forgot-password', '/reset-password'].includes(location.pathname) || location.pathname.startsWith('/reset-password');
+  const isAdminPage = location.pathname.startsWith('/admin');
+
+  // Don't show navbar or cart on admin pages
+  if (isAdminPage) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="min-h-screen bg-white">
@@ -67,6 +82,7 @@ function App() {
           <Router>
             <Layout>
               <Routes>
+                {/* Customer Routes */}
                 <Route path="/" element={<Home />} />
                 <Route path="/shop" element={<Shop />} />
                 <Route path="/product/:id" element={<ProductDetail />} />
@@ -74,7 +90,16 @@ function App() {
                 <Route path="/account" element={<Account />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/signup" element={<Signup />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/orders" element={<OrderHistory />} />
+
+                {/* Admin Routes */}
+                <Route path="/admin" element={<AdminLogin />} />
+                <Route path="/admin/dashboard" element={<Dashboard />} />
+                <Route path="/admin/products" element={<Products />} />
+                <Route path="/admin/orders" element={<Orders />} />
+                <Route path="/admin/customers" element={<Customers />} />
               </Routes>
             </Layout>
           </Router>
@@ -85,3 +110,4 @@ function App() {
 }
 
 export default App;
+
