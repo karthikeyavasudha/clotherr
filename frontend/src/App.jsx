@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-route
 import { CartProvider } from './context/CartContext';
 import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/layout/Navbar';
+import Footer from './components/layout/Footer';
 import Home from './pages/Home';
 import Shop from './pages/Shop';
 import ProductDetail from './pages/ProductDetail';
@@ -14,6 +15,13 @@ import OrderHistory from './pages/OrderHistory';
 import Cart from './components/features/Cart';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+
+// Legal pages
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsConditions from './pages/TermsConditions';
+import RefundPolicy from './pages/RefundPolicy';
+import ContactUs from './pages/ContactUs';
+import ShippingPolicy from './pages/ShippingPolicy';
 
 // Admin pages
 import AdminLogin from './pages/admin/AdminLogin';
@@ -60,16 +68,19 @@ const Layout = ({ children }) => {
   const isAuthPage = ['/login', '/signup', '/forgot-password', '/reset-password'].includes(location.pathname) || location.pathname.startsWith('/reset-password');
   const isAdminPage = location.pathname.startsWith('/admin');
 
-  // Don't show navbar or cart on admin pages
+  // Don't show navbar, footer or cart on admin pages
   if (isAdminPage) {
     return <>{children}</>;
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white flex flex-col">
       {!isAuthPage && <Navbar />}
       <Cart />
+      <main className="flex-grow">
       {children}
+      </main>
+      {!isAuthPage && <Footer />}
     </div>
   );
 };
@@ -94,6 +105,13 @@ function App() {
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/orders" element={<OrderHistory />} />
 
+                {/* Legal Pages */}
+                <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                <Route path="/terms-conditions" element={<TermsConditions />} />
+                <Route path="/refund-policy" element={<RefundPolicy />} />
+                <Route path="/shipping-policy" element={<ShippingPolicy />} />
+                <Route path="/contact" element={<ContactUs />} />
+
                 {/* Admin Routes */}
                 <Route path="/admin" element={<AdminLogin />} />
                 <Route path="/admin/dashboard" element={<Dashboard />} />
@@ -110,4 +128,3 @@ function App() {
 }
 
 export default App;
-
