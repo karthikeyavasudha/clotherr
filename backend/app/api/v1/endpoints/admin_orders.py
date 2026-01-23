@@ -1,50 +1,57 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional
+from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from app.services.supabase import supabase
 from app.core.admin import get_admin_user
+from app.core.config import settings
+from app.db.database import get_db
+from app.db.repository import get_order_repo
 
 router = APIRouter()
 
 class OrderStatusUpdate(BaseModel):
     status: str
 
+def get_repo(db: Session = Depends(get_db)):
+    """Get order repository."""
+    if settings.USE_SUPABASE:
+        return get_order_repo()
+    return get_order_repo(db)
+
 @router.get("/orders")
 def list_all_orders(
     skip: int = 0,
     limit: int = 50,
     status: Optional[str] = None,
-    admin = Depends(get_admin_user)
+    admin = Depends(get_admin_user),
+    repo = Depends(get_repo)
 ):
     """List all orders with user information."""
     try:
-        query = supabase.table("orders").select("*, users(id, email, full_name), order_items(*, products(name, image_url))")
-        
+        orders = repo.get_all(skip=skip, limit=limit)
+        # Filter by status if provided
         if status:
-            query = query.eq("status", status)
-        
-        response = query.order("created_at", desc=True).range(skip, skip + limit - 1).execute()
-        return response.data
+            orders = [o for o in orders if o.get("status") == status]
+        return orders
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/orders/{order_id}")
-def get_order(order_id: str, admin = Depends(get_admin_user)):
+def get_order(order_id: str, admin = Depends(get_admin_user), repo = Depends(get_repo)):
     """Get a single order with full details."""
     try:
-        response = supabase.table("orders").select(
-            "*, users(id, email, full_name, phone, address_line1, address_line2, city, state, postal_code, country), order_items(*, products(name, image_url, price))"
-        ).eq("id", order_id).execute()
-        
-        if not response.data:
+        order = repo.get_by_id(order_id)
+        if not order:
             raise HTTPException(status_code=404, detail="Order not found")
-        
-        return response.data[0]
+        return order
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/orders/{order_id}/status")
-def update_order_status(order_id: str, status_update: OrderStatusUpdate, admin = Depends(get_admin_user)):
+def update_order_status(order_id: str, status_update: OrderStatusUpdate, 
+                        admin = Depends(get_admin_user), repo = Depends(get_repo)):
     """Update order status."""
     valid_statuses = ["pending", "paid", "shipped", "delivered", "cancelled"]
     
@@ -56,16 +63,15 @@ def update_order_status(order_id: str, status_update: OrderStatusUpdate, admin =
     
     try:
         # Check if order exists
-        existing = supabase.table("orders").select("id").eq("id", order_id).execute()
-        if not existing.data:
+        existing = repo.get_by_id(order_id)
+        if not existing:
             raise HTTPException(status_code=404, detail="Order not found")
         
-        response = supabase.table("orders").update({"status": status_update.status}).eq("id", order_id).execute()
-        
-        if not response.data:
+        updated = repo.update_status(order_id, status_update.status)
+        if not updated:
             raise HTTPException(status_code=500, detail="Failed to update order status")
         
-        return response.data[0]
+        return updated
     except HTTPException:
         raise
     except Exception as e:

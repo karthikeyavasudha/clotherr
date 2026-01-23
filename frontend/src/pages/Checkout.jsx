@@ -8,7 +8,7 @@ import { CheckCircle, MapPin, CreditCard, Package, ArrowLeft } from 'lucide-reac
 const Checkout = () => {
     const navigate = useNavigate();
     const { cartItems, getCartTotal, clearCart } = useCart();
-    const { user, token } = useAuth();
+    const { user } = useAuth();
     const [currentStep, setCurrentStep] = useState(1);
     const [loading, setLoading] = useState(false);
     const [orderPlaced, setOrderPlaced] = useState(false);
@@ -44,7 +44,7 @@ const Checkout = () => {
                 }))
             };
 
-            await createOrder(orderData, token);
+            await createOrder(orderData);
             clearCart();
             setOrderPlaced(true);
         } catch (error) {
@@ -354,11 +354,6 @@ const Checkout = () => {
                                 {/* Payment Method */}
                                 <div className="bg-white rounded-lg shadow p-6">
                                     <h2 className="text-2xl font-bold mb-6">Payment Method</h2>
-                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                                        <p className="text-blue-800 text-sm">
-                                            <strong>Demo Mode:</strong> Payment processing is simulated. No actual payment will be charged.
-                                        </p>
-                                    </div>
                                     <div className="space-y-4">
                                         <div className="border-2 border-black rounded-lg p-4 bg-gray-50">
                                             <div className="flex items-center">

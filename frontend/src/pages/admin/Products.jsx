@@ -31,10 +31,13 @@ const Products = () => {
         name: '',
         description: '',
         price: '',
+        compare_at_price: '',
         image_url: '',
+        images: [],
         category: '',
         stock: ''
     });
+    const [newImageUrl, setNewImageUrl] = useState('');
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
@@ -70,7 +73,9 @@ const Products = () => {
                 name: product.name,
                 description: product.description || '',
                 price: product.price.toString(),
+                compare_at_price: product.compare_at_price ? product.compare_at_price.toString() : '',
                 image_url: product.image_url || '',
+                images: product.images || [],
                 category: product.category || '',
                 stock: product.stock.toString()
             });
@@ -80,24 +85,47 @@ const Products = () => {
                 name: '',
                 description: '',
                 price: '',
+                compare_at_price: '',
                 image_url: '',
+                images: [],
                 category: '',
                 stock: ''
             });
         }
+        setNewImageUrl('');
         setShowModal(true);
     };
 
     const handleCloseModal = () => {
         setShowModal(false);
         setEditingProduct(null);
+        setNewImageUrl('');
         setFormData({
             name: '',
             description: '',
             price: '',
+            compare_at_price: '',
             image_url: '',
+            images: [],
             category: '',
             stock: ''
+        });
+    };
+
+    const handleAddImage = () => {
+        if (newImageUrl.trim() && !formData.images.includes(newImageUrl.trim())) {
+            setFormData({
+                ...formData,
+                images: [...formData.images, newImageUrl.trim()]
+            });
+            setNewImageUrl('');
+        }
+    };
+
+    const handleRemoveImage = (index) => {
+        setFormData({
+            ...formData,
+            images: formData.images.filter((_, i) => i !== index)
         });
     };
 
@@ -110,7 +138,9 @@ const Products = () => {
                 name: formData.name,
                 description: formData.description || null,
                 price: parseFloat(formData.price),
+                compare_at_price: formData.compare_at_price ? parseFloat(formData.compare_at_price) : null,
                 image_url: formData.image_url || null,
+                images: formData.images.length > 0 ? formData.images : null,
                 category: formData.category || null,
                 stock: parseInt(formData.stock) || 0
             };
@@ -261,10 +291,10 @@ const Products = () => {
                                             </td>
                                             <td className="p-4">
                                                 <span className={`px-2 py-1 rounded-lg text-sm font-medium ${product.stock === 0
-                                                        ? 'bg-red-100 text-red-700'
-                                                        : product.stock < 10
-                                                            ? 'bg-amber-100 text-amber-700'
-                                                            : 'bg-green-100 text-green-700'
+                                                    ? 'bg-red-100 text-red-700'
+                                                    : product.stock < 10
+                                                        ? 'bg-amber-100 text-amber-700'
+                                                        : 'bg-green-100 text-green-700'
                                                     }`}>
                                                     {product.stock}
                                                 </span>
@@ -332,7 +362,7 @@ const Products = () => {
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">Price (₹) *</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Sale Price (₹) *</label>
                                     <input
                                         type="number"
                                         step="0.01"
@@ -342,6 +372,19 @@ const Products = () => {
                                         required
                                     />
                                 </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Original Price (₹)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={formData.compare_at_price}
+                                        onChange={(e) => setFormData({ ...formData, compare_at_price: e.target.value })}
+                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-black"
+                                        placeholder="Optional"
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">Stock *</label>
                                     <input
@@ -354,17 +397,22 @@ const Products = () => {
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                                <input
-                                    type="text"
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
+                                <select
                                     value={formData.category}
                                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-black"
-                                    placeholder="e.g., T-Shirts, Jeans"
-                                />
+                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-black"
+                                    required
+                                >
+                                    <option value="">Select Category</option>
+                                    <option value="Men">Men</option>
+                                    <option value="Women">Women</option>
+                                    <option value="Kids">Kids</option>
+                                    <option value="Unisex">Unisex</option>
+                                </select>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Image URL</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Primary Image URL</label>
                                 <input
                                     type="url"
                                     value={formData.image_url}
@@ -372,6 +420,44 @@ const Products = () => {
                                     className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-black"
                                     placeholder="https://..."
                                 />
+                            </div>
+
+                            {/* Additional Images */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Additional Images</label>
+                                <div className="flex gap-2 mb-3">
+                                    <input
+                                        type="url"
+                                        value={newImageUrl}
+                                        onChange={(e) => setNewImageUrl(e.target.value)}
+                                        onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddImage())}
+                                        className="flex-1 px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-black text-sm"
+                                        placeholder="Add another image URL..."
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleAddImage}
+                                        className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors text-sm font-medium"
+                                    >
+                                        Add
+                                    </button>
+                                </div>
+                                {formData.images.length > 0 && (
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {formData.images.map((img, index) => (
+                                            <div key={index} className="relative group aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                                                <img src={img} alt={`Image ${index + 1}`} className="w-full h-full object-cover" />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveImage(index)}
+                                                    className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                                >
+                                                    <X className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                             <div className="flex gap-3 pt-4">
                                 <button

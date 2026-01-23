@@ -8,3 +8,5 @@ pydantic[email]
 passlib[argon2]
 python-jose[cryptography]
 fastapi-mail
+sqlalchemy
+psycopg2-binary

@@ -5,7 +5,7 @@ import { updateUserProfile } from '../services/api';
 import { User, MapPin, Phone, Mail, LogOut, Calendar, Edit2, Save, X } from 'lucide-react';
 
 const Account = () => {
-    const { user, token, setUser } = useAuth();
+    const { user, setUser } = useAuth();
     const navigate = useNavigate();
     const [isEditing, setIsEditing] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -37,7 +37,7 @@ const Account = () => {
         try {
             setError('');
             setLoading(true);
-            const updatedUser = await updateUserProfile(user.id, formData, token);
+            const updatedUser = await updateUserProfile(user.id, formData);
 
             // Update user in AuthContext and localStorage
             const newUserData = { ...user, ...updatedUser };

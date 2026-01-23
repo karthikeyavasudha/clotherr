@@ -1,41 +1,55 @@
 from fastapi import APIRouter, HTTPException, Depends
-from app.services.supabase import supabase
+from sqlalchemy.orm import Session
 from app.core.admin import get_admin_user
+from app.core.config import settings
+from app.db.database import get_db
+from app.db.repository import get_product_repo, get_user_repo, get_order_repo
 
 router = APIRouter()
 
+def get_repos(db: Session = Depends(get_db)):
+    """Get all required repositories."""
+    if settings.USE_SUPABASE:
+        return {
+            "product": get_product_repo(),
+            "user": get_user_repo(),
+            "order": get_order_repo()
+        }
+    return {
+        "product": get_product_repo(db),
+        "user": get_user_repo(db),
+        "order": get_order_repo(db)
+    }
+
 @router.get("/stats")
-def get_dashboard_stats(admin = Depends(get_admin_user)):
+def get_dashboard_stats(admin = Depends(get_admin_user), repos = Depends(get_repos)):
     """Get dashboard statistics."""
     try:
-        # Total products
-        products = supabase.table("products").select("id", count="exact").execute()
-        total_products = products.count if products.count else len(products.data)
+        product_repo = repos["product"]
+        user_repo = repos["user"]
+        order_repo = repos["order"]
         
-        # Total customers (non-admin users)
-        users = supabase.table("users").select("id", count="exact").eq("is_admin", False).execute()
-        total_customers = users.count if users.count else len(users.data)
+        # Total products
+        products = product_repo.get_all(limit=1000)
+        total_products = len(products)
+        
+        # Total customers
+        total_customers = user_repo.count()
         
         # Total orders and revenue
-        orders = supabase.table("orders").select("id, total_amount, status, created_at").execute()
-        total_orders = len(orders.data)
-        total_revenue = sum(o.get("total_amount", 0) for o in orders.data)
+        total_orders = order_repo.count()
+        total_revenue = order_repo.sum_revenue()
         
         # Orders by status
-        status_counts = {}
-        for order in orders.data:
-            status = order.get("status", "unknown")
-            status_counts[status] = status_counts.get(status, 0) + 1
+        status_counts = order_repo.count_by_status()
         
         # Recent orders (last 5)
-        recent_orders = supabase.table("orders").select(
-            "id, total_amount, status, created_at, users(full_name, email)"
-        ).order("created_at", desc=True).limit(5).execute()
+        recent_orders = order_repo.get_recent(limit=5)
         
         # Low stock products (stock < 10)
-        low_stock = supabase.table("products").select(
-            "id, name, stock"
-        ).lt("stock", 10).order("stock").limit(5).execute()
+        all_products = product_repo.get_all(limit=1000)
+        low_stock = [p for p in all_products if p.get("stock", 0) < 10]
+        low_stock = sorted(low_stock, key=lambda x: x.get("stock", 0))[:5]
         
         return {
             "total_products": total_products,
@@ -43,8 +57,8 @@ def get_dashboard_stats(admin = Depends(get_admin_user)):
             "total_orders": total_orders,
             "total_revenue": total_revenue,
             "orders_by_status": status_counts,
-            "recent_orders": recent_orders.data,
-            "low_stock_products": low_stock.data
+            "recent_orders": recent_orders,
+            "low_stock_products": low_stock
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

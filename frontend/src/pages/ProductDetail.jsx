@@ -12,6 +12,7 @@ const ProductDetail = () => {
     const [loading, setLoading] = useState(true);
     const [selectedSize, setSelectedSize] = useState('M');
     const [quantity, setQuantity] = useState(1);
+    const [selectedImage, setSelectedImage] = useState(0);
 
     useEffect(() => {
         const loadProduct = async () => {
@@ -32,6 +33,17 @@ const ProductDetail = () => {
             addToCart({ ...product, size: selectedSize, quantity });
             navigate('/shop');
         }
+    };
+
+    // Get all images (primary + additional)
+    const getAllImages = () => {
+        if (!product) return [];
+        const allImages = [];
+        if (product.image_url) allImages.push(product.image_url);
+        if (product.images && Array.isArray(product.images)) {
+            allImages.push(...product.images);
+        }
+        return allImages;
     };
 
     if (loading) {
@@ -69,13 +81,38 @@ const ProductDetail = () => {
 
                 <div className="bg-white rounded-lg shadow-lg overflow-hidden">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-8">
-                        {/* Product Image */}
-                        <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
-                            <img
-                                src={product.image_url}
-                                alt={product.name}
-                                className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-                            />
+                        {/* Product Images Gallery */}
+                        <div className="space-y-4">
+                            {/* Main Image */}
+                            <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                                <img
+                                    src={getAllImages()[selectedImage] || product.image_url || 'https://via.placeholder.com/400'}
+                                    alt={product.name}
+                                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                                />
+                            </div>
+
+                            {/* Thumbnail Gallery */}
+                            {getAllImages().length > 1 && (
+                                <div className="flex gap-2 overflow-x-auto pb-2">
+                                    {getAllImages().map((img, index) => (
+                                        <button
+                                            key={index}
+                                            onClick={() => setSelectedImage(index)}
+                                            className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${selectedImage === index
+                                                ? 'border-black'
+                                                : 'border-gray-200 hover:border-gray-400'
+                                                }`}
+                                        >
+                                            <img
+                                                src={img}
+                                                alt={`${product.name} ${index + 1}`}
+                                                className="w-full h-full object-cover"
+                                            />
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         {/* Product Info */}
@@ -122,19 +159,28 @@ const ProductDetail = () => {
                                 <div className="flex items-center gap-4">
                                     <button
                                         onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                                        className="w-10 h-10 border-2 border-gray-300 rounded-lg hover:border-gray-400 transition-colors"
+                                        disabled={product.stock === 0}
+                                        className="w-10 h-10 border-2 border-gray-300 rounded-lg hover:border-gray-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         −
                                     </button>
                                     <span className="text-xl font-semibold w-12 text-center">{quantity}</span>
                                     <button
                                         onClick={() => setQuantity(Math.min(product.stock, quantity + 1))}
-                                        className="w-10 h-10 border-2 border-gray-300 rounded-lg hover:border-gray-400 transition-colors"
+                                        disabled={product.stock === 0 || quantity >= product.stock}
+                                        className="w-10 h-10 border-2 border-gray-300 rounded-lg hover:border-gray-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         +
                                     </button>
                                 </div>
-                                <p className="text-sm text-gray-500 mt-2">{product.stock} items in stock</p>
+                                {/* Stock Status */}
+                                {product.stock === 0 ? (
+                                    <p className="text-sm text-red-600 font-medium mt-2">Out of Stock</p>
+                                ) : product.stock <= 5 ? (
+                                    <p className="text-sm text-orange-600 font-medium mt-2">⚠️ Only {product.stock} left in stock - order soon!</p>
+                                ) : (
+                                    <p className="text-sm text-green-600 mt-2">✓ {product.stock} items in stock</p>
+                                )}
                             </div>
 
                             {/* Add to Cart Button */}

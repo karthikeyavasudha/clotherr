@@ -5,6 +5,7 @@ import { Package, Calendar, ChevronRight, ShoppingBag, Download, Eye } from 'luc
 import { useAuth } from '../context/AuthContext';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { COMPANY } from '../config/company';
 
 const OrderHistory = () => {
     const [orders, setOrders] = useState([]);
@@ -30,8 +31,8 @@ const OrderHistory = () => {
             doc.text('INVOICE', 105, 20, { align: 'center' });
 
             doc.setFontSize(10);
-            doc.text('Clotherr Inc.', 105, 25, { align: 'center' });
-            doc.text('support@clotherr.online', 105, 30, { align: 'center' });
+            doc.text(COMPANY.legalName, 105, 25, { align: 'center' });
+            doc.text(COMPANY.supportEmail, 105, 30, { align: 'center' });
 
             // Order Details
             doc.setFontSize(12);
