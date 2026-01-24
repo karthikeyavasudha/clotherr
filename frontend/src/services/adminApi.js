@@ -242,3 +242,57 @@ export const deleteChargeSetting = async (key) => {
     }
     return response.json();
 };
+
+// Discounts
+export const fetchDiscounts = async () => {
+    const response = await fetch(`${API_URL}/discounts`, {
+        headers: getAuthHeaders()
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to fetch discounts');
+    }
+    return response.json();
+};
+
+export const createDiscount = async (discountData) => {
+    const response = await fetch(`${API_URL}/discounts`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(discountData)
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to create discount');
+    }
+    return response.json();
+};
+
+export const updateDiscount = async (discountId, discountData) => {
+    const response = await fetch(`${API_URL}/discounts/${discountId}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(discountData)
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to update discount');
+    }
+    return response.json();
+};
+
+export const deleteDiscount = async (discountId) => {
+    const response = await fetch(`${API_URL}/discounts/${discountId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to delete discount');
+    }
+    return response.json();
+};

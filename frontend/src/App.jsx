@@ -30,6 +30,7 @@ import Products from './pages/admin/Products';
 import Orders from './pages/admin/Orders';
 import Customers from './pages/admin/Customers';
 import Settings from './pages/admin/Settings';
+import Discounts from './pages/admin/Discounts';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -119,6 +120,7 @@ function App() {
                 <Route path="/admin/products" element={<Products />} />
                 <Route path="/admin/orders" element={<Orders />} />
                 <Route path="/admin/customers" element={<Customers />} />
+                <Route path="/admin/discounts" element={<Discounts />} />
                 <Route path="/admin/settings" element={<Settings />} />
               </Routes>
             </Layout>

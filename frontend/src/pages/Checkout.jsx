@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { createOrder, createRazorpayOrder, verifyRazorpayPayment, fetchPaymentSettings } from '../services/api';
-import { CheckCircle, MapPin, CreditCard, Package, ArrowLeft, AlertCircle, Loader } from 'lucide-react';
+import { createOrder, createRazorpayOrder, verifyRazorpayPayment, fetchPaymentSettings, validateDiscountCode, useDiscountCode, fetchAvailableDiscounts } from '../services/api';
+import { CheckCircle, MapPin, CreditCard, Package, ArrowLeft, AlertCircle, Loader, Tag, X, Percent } from 'lucide-react';
 
 const Checkout = () => {
     const navigate = useNavigate();
@@ -19,6 +19,13 @@ const Checkout = () => {
     const [paymentSettings, setPaymentSettings] = useState(null);
     const [settingsLoading, setSettingsLoading] = useState(true);
 
+    // Discount code state
+    const [discountCode, setDiscountCode] = useState('');
+    const [appliedDiscount, setAppliedDiscount] = useState(null);
+    const [discountLoading, setDiscountLoading] = useState(false);
+    const [discountError, setDiscountError] = useState('');
+    const [availableDiscounts, setAvailableDiscounts] = useState([]);
+
     // Calculate total extra charges
     const getExtraChargesTotal = () => {
         let total = 0;
@@ -33,9 +40,39 @@ const Checkout = () => {
         return total;
     };
 
-    // Get final total including extra charges
+    // Get discount amount
+    const getDiscountAmount = () => {
+        return appliedDiscount?.discount_amount || 0;
+    };
+
+    // Get final total including extra charges minus discount
     const getFinalTotal = () => {
-        return getCartTotal() + getExtraChargesTotal();
+        return Math.max(0, getCartTotal() + getExtraChargesTotal() - getDiscountAmount());
+    };
+
+    // Handle applying discount code
+    const handleApplyDiscount = async (codeOverride = null) => {
+        const code = codeOverride || discountCode;
+        if (!code.trim()) return;
+        
+        setDiscountLoading(true);
+        setDiscountError('');
+        
+        try {
+            const result = await validateDiscountCode(code, getCartTotal(), user?.id);
+            setAppliedDiscount(result);
+            setDiscountCode('');
+        } catch (err) {
+            setDiscountError(err.message);
+        } finally {
+            setDiscountLoading(false);
+        }
+    };
+
+    // Remove applied discount
+    const removeDiscount = () => {
+        setAppliedDiscount(null);
+        setDiscountError('');
     };
 
     // Address form state
@@ -76,7 +113,18 @@ const Checkout = () => {
                 setSettingsLoading(false);
             }
         };
+        
+        const loadAvailableDiscounts = async () => {
+            try {
+                const discounts = await fetchAvailableDiscounts();
+                setAvailableDiscounts(discounts);
+            } catch (error) {
+                console.error('Failed to load discounts:', error);
+            }
+        };
+        
         loadPaymentSettings();
+        loadAvailableDiscounts();
     }, []);
 
     const handleAddressChange = (e) => {
@@ -90,11 +138,14 @@ const Checkout = () => {
 
             const shippingAddress = `${address.full_name}, ${address.address_line1}${address.address_line2 ? ', ' + address.address_line2 : ''}, ${address.city}, ${address.state} ${address.postal_code}, ${address.country}. Phone: ${address.phone}`;
 
-            // Create Razorpay order (includes extra charges except COD charge)
+            // Create Razorpay order (includes extra charges and discount)
             const razorpayExtraCharges = paymentSettings?.extra_charges?.reduce((sum, charge) => sum + (charge.amount || 0), 0) || 0;
+            const discountAmount = appliedDiscount?.discount_amount || 0;
             const orderData = {
-                amount: getCartTotal() + razorpayExtraCharges,
+                amount: Math.max(0, getCartTotal() + razorpayExtraCharges - discountAmount),
                 shipping_address: shippingAddress,
+                discount_code: appliedDiscount?.code || null,
+                discount_amount: discountAmount,
                 items: cartItems.map(item => ({
                     product_id: item.id,
                     quantity: item.quantity,
@@ -131,6 +182,12 @@ const Checkout = () => {
                         };
 
                         await verifyRazorpayPayment(verifyData, token);
+                        
+                        // Record discount usage
+                        if (appliedDiscount?.code) {
+                            await useDiscountCode(appliedDiscount.code, token, user?.id);
+                        }
+                        
                         clearCart();
                         setOrderPlaced(true);
                     } catch (error) {
@@ -172,6 +229,8 @@ const Checkout = () => {
                 total_amount: totalAmount,
                 shipping_address: shippingAddress,
                 status: "pending",
+                discount_code: appliedDiscount?.code || null,
+                discount_amount: appliedDiscount?.discount_amount || 0,
                 items: cartItems.map(item => ({
                     product_id: item.id,
                     quantity: item.quantity,
@@ -180,6 +239,12 @@ const Checkout = () => {
             };
 
             await createOrder(orderData, token);
+            
+            // Record discount usage
+            if (appliedDiscount?.code) {
+                await useDiscountCode(appliedDiscount.code, token, user?.id);
+            }
+            
             clearCart();
             setOrderPlaced(true);
         } catch (error) {
@@ -599,7 +664,7 @@ const Checkout = () => {
                                                 Processing...
                                             </>
                                         ) : paymentMethod === 'razorpay' ? (
-                                            `Pay ₹${getCartTotal().toFixed(2)}`
+                                            `Pay ₹${getFinalTotal().toFixed(2)}`
                                         ) : (
                                             `Place Order (COD) - ₹${getFinalTotal().toFixed(2)}`
                                         )}
@@ -621,7 +686,7 @@ const Checkout = () => {
                             <h3 className="text-lg font-bold mb-4">Order Summary</h3>
                             <div className="space-y-3 mb-4">
                                 <div className="flex justify-between text-sm">
-                                    <span>Subtotal ({cartItems.length} items)</span>
+                                    <span>Subtotal ({cartItems.reduce((sum, item) => sum + item.quantity, 0)} items)</span>
                                     <span>₹{getCartTotal().toFixed(2)}</span>
                                 </div>
                                 
@@ -641,11 +706,101 @@ const Checkout = () => {
                                     </div>
                                 ))}
                                 
+                                {/* Applied Discount */}
+                                {appliedDiscount && (
+                                    <div className="flex justify-between text-sm text-green-600">
+                                        <div className="flex items-center gap-1">
+                                            <Tag className="w-4 h-4" />
+                                            <span>{appliedDiscount.code}</span>
+                                            <button 
+                                                onClick={removeDiscount}
+                                                className="ml-1 text-gray-400 hover:text-red-500"
+                                            >
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                        </div>
+                                        <span>-₹{appliedDiscount.discount_amount.toFixed(2)}</span>
+                                    </div>
+                                )}
+                                
                                 <div className="border-t pt-3 flex justify-between font-bold text-lg">
                                     <span>Total</span>
                                     <span>₹{getFinalTotal().toFixed(2)}</span>
                                 </div>
                             </div>
+                            
+                            {/* Discount Code Input */}
+                            {!appliedDiscount && (
+                                <div className="border-t pt-4">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Have a discount code?
+                                    </label>
+                                    <div className="flex gap-2 w-full">
+                                        <input
+                                            type="text"
+                                            value={discountCode}
+                                            onChange={(e) => setDiscountCode(e.target.value.toUpperCase())}
+                                            placeholder="Enter code"
+                                            className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                                        />
+                                        <button
+                                            onClick={handleApplyDiscount}
+                                            disabled={discountLoading || !discountCode.trim()}
+                                            className="px-4 py-2 bg-gray-500 text-white text-sm rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                                        >
+                                            {discountLoading ? '...' : 'Apply'}
+                                        </button>
+                                    </div>
+                                    {discountError && (
+                                        <p className="text-xs text-red-500 mt-1">{discountError}</p>
+                                    )}
+                                </div>
+                            )}
+                            
+                            {/* Available Discounts */}
+                            {availableDiscounts.length > 0 && !appliedDiscount && (
+                                <div className="border-t pt-4 mt-4">
+                                    <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                                        <Tag className="w-4 h-4" />
+                                        Available Offers
+                                    </h4>
+                                    <div className="space-y-2">
+                                        {availableDiscounts.map((discount) => (
+                                            <div 
+                                                key={discount.code} 
+                                                className="p-3 border border-gray-200 rounded-lg cursor-pointer hover:border-gray-300 transition-colors"
+                                                onClick={() => handleApplyDiscount(discount.code)}
+                                            >
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <Tag className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                                                        <span className="font-mono font-semibold text-gray-800 truncate">{discount.code}</span>
+                                                    </div>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleApplyDiscount(discount.code);
+                                                        }}
+                                                        className="text-xs px-3 py-1 border border-green-600 text-green-600 rounded hover:bg-green-600 hover:text-white transition-colors flex-shrink-0"
+                                                    >
+                                                        Apply
+                                                    </button>
+                                                </div>
+                                                <p className="text-xs text-gray-600 mt-1">
+                                                    {discount.type === 'percentage' 
+                                                        ? `${discount.value}% off${discount.max_discount ? ` (up to ₹${discount.max_discount})` : ''}`
+                                                        : `₹${discount.value} off`
+                                                    }
+                                                    {discount.min_order_amount > 0 && ` on orders above ₹${discount.min_order_amount}`}
+                                                </p>
+                                                {discount.description && (
+                                                    <p className="text-xs text-gray-400 mt-1">{discount.description}</p>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
