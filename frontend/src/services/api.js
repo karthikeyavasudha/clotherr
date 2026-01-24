@@ -107,3 +107,54 @@ export const fetchOrders = async (token) => {
     }
     return response.json();
 };
+
+// Razorpay Payment APIs
+export const createRazorpayOrder = async (orderData, token) => {
+    const response = await fetch(`${API_URL}/payments/create-order`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(orderData)
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to create payment order');
+    }
+    return response.json();
+};
+
+export const verifyRazorpayPayment = async (paymentData, token) => {
+    const response = await fetch(`${API_URL}/payments/verify`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(paymentData)
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Payment verification failed');
+    }
+    return response.json();
+};
+
+// Payment Settings (public)
+export const fetchPaymentSettings = async () => {
+    const response = await fetch(`${API_URL}/payments/settings`);
+    
+    if (!response.ok) {
+        // Return defaults if API fails
+        return {
+            payment_cod_enabled: true,
+            payment_razorpay_enabled: true,
+            min_order_amount: 0,
+            cod_extra_charge: 0
+        };
+    }
+    return response.json();
+};

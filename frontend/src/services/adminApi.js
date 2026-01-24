@@ -174,3 +174,71 @@ export const fetchUserDetails = async (userId) => {
     }
     return response.json();
 };
+
+// Settings
+export const fetchAdminSettings = async () => {
+    const response = await fetch(`${API_URL}/settings`, {
+        headers: getAuthHeaders()
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to fetch settings');
+    }
+    return response.json();
+};
+
+export const updateSettingEnabled = async (key, enabled) => {
+    const response = await fetch(`${API_URL}/settings/${key}/enabled`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ enabled })
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to update setting');
+    }
+    return response.json();
+};
+
+export const updateSettingNumber = async (key, numberValue) => {
+    const response = await fetch(`${API_URL}/settings/${key}/number`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ number_value: parseFloat(numberValue) })
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to update setting');
+    }
+    return response.json();
+};
+
+export const createChargeSetting = async (name, description, numberValue, enabled = true) => {
+    const response = await fetch(`${API_URL}/settings/charge`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ name, description, number_value: parseFloat(numberValue), enabled })
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to create setting');
+    }
+    return response.json();
+};
+
+export const deleteChargeSetting = async (key) => {
+    const response = await fetch(`${API_URL}/settings/${key}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to delete setting');
+    }
+    return response.json();
+};

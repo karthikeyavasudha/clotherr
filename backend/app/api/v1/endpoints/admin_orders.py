@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional
 from pydantic import BaseModel
-from app.services.supabase import supabase
+from app.services.supabase import supabase_admin
 from app.core.admin import get_admin_user
 
 router = APIRouter()
@@ -18,7 +18,7 @@ def list_all_orders(
 ):
     """List all orders with user information."""
     try:
-        query = supabase.table("orders").select("*, users(id, email, full_name), order_items(*, products(name, image_url))")
+        query = supabase_admin.table("orders").select("*, users(id, email, full_name), order_items(*, products(name, image_url))")
         
         if status:
             query = query.eq("status", status)
@@ -32,7 +32,7 @@ def list_all_orders(
 def get_order(order_id: str, admin = Depends(get_admin_user)):
     """Get a single order with full details."""
     try:
-        response = supabase.table("orders").select(
+        response = supabase_admin.table("orders").select(
             "*, users(id, email, full_name, phone, address_line1, address_line2, city, state, postal_code, country), order_items(*, products(name, image_url, price))"
         ).eq("id", order_id).execute()
         
@@ -56,11 +56,11 @@ def update_order_status(order_id: str, status_update: OrderStatusUpdate, admin =
     
     try:
         # Check if order exists
-        existing = supabase.table("orders").select("id").eq("id", order_id).execute()
+        existing = supabase_admin.table("orders").select("id").eq("id", order_id).execute()
         if not existing.data:
             raise HTTPException(status_code=404, detail="Order not found")
         
-        response = supabase.table("orders").update({"status": status_update.status}).eq("id", order_id).execute()
+        response = supabase_admin.table("orders").update({"status": status_update.status}).eq("id", order_id).execute()
         
         if not response.data:
             raise HTTPException(status_code=500, detail="Failed to update order status")
