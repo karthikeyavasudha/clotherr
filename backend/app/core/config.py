@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     
     SUPABASE_URL: str
     SUPABASE_KEY: str
+    SUPABASE_SERVICE_ROLE_KEY: str
     
     # JWT Settings
     JWT_SECRET_KEY: str = "your-secret-key-change-this-in-production"
@@ -23,6 +24,10 @@ class Settings(BaseSettings):
     MAIL_FROM: str
     MAIL_PORT: int = 587
     MAIL_SERVER: str = "smtp.zoho.com"
+
+    # Razorpay Settings
+    RAZORPAY_KEY_ID: str
+    RAZORPAY_KEY_SECRET: str
 
     class Config:
         env_file = ".env"

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional
 from app.schemas.product import Product, ProductCreate
-from app.services.supabase import supabase
+from app.services.supabase import supabase_admin
 from app.core.admin import get_admin_user
 
 router = APIRouter()
@@ -16,7 +16,7 @@ def list_all_products(
 ):
     """List all products with optional search and category filter."""
     try:
-        query = supabase.table("products").select("*")
+        query = supabase_admin.table("products").select("*")
         
         if search:
             query = query.ilike("name", f"%{search}%")
@@ -33,7 +33,7 @@ def create_product(product: ProductCreate, admin = Depends(get_admin_user)):
     """Create a new product."""
     try:
         product_data = product.model_dump()
-        response = supabase.table("products").insert(product_data).execute()
+        response = supabase_admin.table("products").insert(product_data).execute()
         
         if not response.data:
             raise HTTPException(status_code=500, detail="Failed to create product")
@@ -46,7 +46,7 @@ def create_product(product: ProductCreate, admin = Depends(get_admin_user)):
 def get_product(product_id: str, admin = Depends(get_admin_user)):
     """Get a single product by ID."""
     try:
-        response = supabase.table("products").select("*").eq("id", product_id).execute()
+        response = supabase_admin.table("products").select("*").eq("id", product_id).execute()
         
         if not response.data:
             raise HTTPException(status_code=404, detail="Product not found")
@@ -60,12 +60,12 @@ def update_product(product_id: str, product: ProductCreate, admin = Depends(get_
     """Update an existing product."""
     try:
         # Check if product exists
-        existing = supabase.table("products").select("id").eq("id", product_id).execute()
+        existing = supabase_admin.table("products").select("id").eq("id", product_id).execute()
         if not existing.data:
             raise HTTPException(status_code=404, detail="Product not found")
         
         product_data = product.model_dump()
-        response = supabase.table("products").update(product_data).eq("id", product_id).execute()
+        response = supabase_admin.table("products").update(product_data).eq("id", product_id).execute()
         
         if not response.data:
             raise HTTPException(status_code=500, detail="Failed to update product")
@@ -81,11 +81,11 @@ def delete_product(product_id: str, admin = Depends(get_admin_user)):
     """Delete a product."""
     try:
         # Check if product exists
-        existing = supabase.table("products").select("id").eq("id", product_id).execute()
+        existing = supabase_admin.table("products").select("id").eq("id", product_id).execute()
         if not existing.data:
             raise HTTPException(status_code=404, detail="Product not found")
         
-        supabase.table("products").delete().eq("id", product_id).execute()
+        supabase_admin.table("products").delete().eq("id", product_id).execute()
         
         return {"message": "Product deleted successfully"}
     except HTTPException:
@@ -97,7 +97,7 @@ def delete_product(product_id: str, admin = Depends(get_admin_user)):
 def get_categories(admin = Depends(get_admin_user)):
     """Get all unique product categories."""
     try:
-        response = supabase.table("products").select("category").execute()
+        response = supabase_admin.table("products").select("category").execute()
         categories = list(set(p["category"] for p in response.data if p.get("category")))
         return categories
     except Exception as e:

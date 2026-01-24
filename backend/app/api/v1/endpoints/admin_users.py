@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional
-from app.services.supabase import supabase
+from app.services.supabase import supabase_admin
 from app.core.admin import get_admin_user
 
 router = APIRouter()
@@ -14,7 +14,7 @@ def list_all_users(
 ):
     """List all users with basic information."""
     try:
-        query = supabase.table("users").select(
+        query = supabase_admin.table("users").select(
             "id, email, full_name, phone, city, state, country, is_admin, created_at"
         )
         
@@ -31,7 +31,7 @@ def get_user(user_id: str, admin = Depends(get_admin_user)):
     """Get user details with order history."""
     try:
         # Get user details
-        user_response = supabase.table("users").select(
+        user_response = supabase_admin.table("users").select(
             "id, email, full_name, phone, address_line1, address_line2, city, state, postal_code, country, is_admin, created_at"
         ).eq("id", user_id).execute()
         
@@ -41,14 +41,14 @@ def get_user(user_id: str, admin = Depends(get_admin_user)):
         user = user_response.data[0]
         
         # Get user's orders
-        orders_response = supabase.table("orders").select(
+        orders_response = supabase_admin.table("orders").select(
             "id, status, total_amount, created_at"
         ).eq("user_id", user_id).order("created_at", desc=True).limit(10).execute()
         
         user["recent_orders"] = orders_response.data
         
         # Get order count and total spent
-        all_orders = supabase.table("orders").select("total_amount").eq("user_id", user_id).execute()
+        all_orders = supabase_admin.table("orders").select("total_amount").eq("user_id", user_id).execute()
         user["total_orders"] = len(all_orders.data)
         user["total_spent"] = sum(o.get("total_amount", 0) for o in all_orders.data)
         
