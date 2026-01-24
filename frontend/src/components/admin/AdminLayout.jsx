@@ -9,7 +9,8 @@ import {
     LogOut,
     Menu,
     X,
-    ChevronRight
+    ChevronRight,
+    Tag
 } from 'lucide-react';
 import logo from '../../assets/logo.png';
 
@@ -39,6 +40,7 @@ const AdminLayout = ({ children }) => {
         { path: '/admin/products', icon: Package, label: 'Products' },
         { path: '/admin/orders', icon: ShoppingCart, label: 'Orders' },
         { path: '/admin/customers', icon: Users, label: 'Customers' },
+        { path: '/admin/discounts', icon: Tag, label: 'Discounts' },
         { path: '/admin/settings', icon: Settings, label: 'Settings' },
     ];
 

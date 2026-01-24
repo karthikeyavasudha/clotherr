@@ -158,3 +158,39 @@ export const fetchPaymentSettings = async () => {
     }
     return response.json();
 };
+
+export const validateDiscountCode = async (code, orderAmount, userId = null) => {
+    const response = await fetch(`${API_URL}/discounts/validate`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ code, order_amount: orderAmount, user_id: userId })
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Invalid discount code');
+    }
+    return response.json();
+};
+
+export const useDiscountCode = async (code, token, userId = null) => {
+    const response = await fetch(`${API_URL}/discounts/use/${code}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ user_id: userId })
+    });
+    return response.json();
+};
+
+export const fetchAvailableDiscounts = async () => {
+    const response = await fetch(`${API_URL}/discounts/available`);
+    if (!response.ok) {
+        return [];
+    }
+    return response.json();
+};
