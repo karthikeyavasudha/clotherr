@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchOrders } from '../services/api';
-import { Package, Calendar, ChevronRight, ShoppingBag, Download, Eye } from 'lucide-react';
+import { fetchOrders, fetchOrderStatuses } from '../services/api';
+import { Package, Calendar, ChevronRight, ShoppingBag, Download, Eye, Truck, MapPin, ExternalLink } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -11,6 +11,7 @@ const OrderHistory = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [expandedOrders, setExpandedOrders] = useState({});
+    const [statusOptions, setStatusOptions] = useState([]);
     const navigate = useNavigate();
     const { token, user } = useAuth();
 
@@ -113,12 +114,18 @@ const OrderHistory = () => {
             return;
         }
 
-        const loadOrders = async () => {
+        const loadData = async () => {
             try {
-                const data = await fetchOrders(token);
+                // Load orders and statuses in parallel
+                const [ordersData, statusesData] = await Promise.all([
+                    fetchOrders(token),
+                    fetchOrderStatuses()
+                ]);
+                
                 // Sort orders by date descending (newest first)
-                const sortedOrders = data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                const sortedOrders = ordersData.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
                 setOrders(sortedOrders);
+                setStatusOptions(statusesData);
             } catch (err) {
                 setError('Failed to load orders. Please try again later.');
                 console.error(err);
@@ -127,7 +134,7 @@ const OrderHistory = () => {
             }
         };
 
-        loadOrders();
+        loadData();
     }, [token, navigate]);
 
     if (loading) {
@@ -218,6 +225,152 @@ const OrderHistory = () => {
 
                             {expandedOrders[order.id] && (
                                 <div className="p-6 bg-white border-t border-gray-100 animate-fadeIn">
+                                    {/* Tracking Progress Bar */}
+                                    <div className="mb-6">
+                                        {(() => {
+                                            // Use dynamic statuses from API, filter out 'paid' and 'cancelled' for progress display
+                                            // Map 'pending' to 'Order Placed' for better UX
+                                            const progressStatuses = statusOptions.filter(s => 
+                                                !['paid', 'cancelled'].includes(s.status_code)
+                                            );
+                                            
+                                            const steps = progressStatuses.length > 0 
+                                                ? progressStatuses.map(s => ({
+                                                    key: s.status_code,
+                                                    label: s.status_code === 'pending' ? 'Order Placed' : s.display_name,
+                                                    icon: s.icon || '📦'
+                                                }))
+                                                : [
+                                                    { key: 'pending', label: 'Order Placed', icon: '📦' },
+                                                    { key: 'shipped', label: 'Shipped', icon: '🚚' },
+                                                    { key: 'in_transit', label: 'In Transit', icon: '✈️' },
+                                                    { key: 'out_for_delivery', label: 'Out for Delivery', icon: '🛵' },
+                                                    { key: 'delivered', label: 'Delivered', icon: '✅' }
+                                                ];
+                                            
+                                            // Use order.status directly for tracking progress
+                                            let currentStatus = order.status || 'pending';
+                                            // Map 'paid' to 'pending' for display (order placed but not yet shipped)
+                                            if (currentStatus === 'paid') currentStatus = 'pending';
+                                            const currentIndex = steps.findIndex(s => s.key === currentStatus);
+                                            const isFailed = order.status === 'cancelled';
+                                            
+                                            return (
+                                                <div className="relative">
+                                                    {/* Progress Line */}
+                                                    <div className="absolute top-5 left-0 right-0 h-1 bg-gray-200 mx-8"></div>
+                                                    <div 
+                                                        className={`absolute top-5 left-0 h-1 mx-8 transition-all duration-500 ${isFailed ? 'bg-red-500' : 'bg-green-500'}`}
+                                                        style={{ width: `calc(${Math.max(0, currentIndex) / (steps.length - 1) * 100}% - 4rem)` }}
+                                                    ></div>
+                                                    
+                                                    {/* Steps */}
+                                                    <div className="relative flex justify-between">
+                                                        {steps.map((step, index) => {
+                                                            const isCompleted = index <= currentIndex && !isFailed;
+                                                            const isCurrent = index === currentIndex;
+                                                            return (
+                                                                <div key={step.key} className="flex flex-col items-center">
+                                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg z-10 transition-all
+                                                                        ${isCompleted ? 'bg-green-500 text-white' : 
+                                                                          isFailed && isCurrent ? 'bg-red-500 text-white' :
+                                                                          'bg-gray-200 text-gray-400'}`}>
+                                                                        {isFailed && isCurrent ? '❌' : step.icon}
+                                                                    </div>
+                                                                    <p className={`mt-2 text-xs text-center font-medium
+                                                                        ${isCompleted || isCurrent ? 'text-gray-900' : 'text-gray-400'}`}>
+                                                                        {step.label}
+                                                                    </p>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+
+                                    {/* Tracking Information - Only show when shipped or beyond */}
+                                    {['shipped', 'in_transit', 'out_for_delivery', 'delivered'].includes(order.status) && (
+                                        <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
+                                            <h4 className="text-sm font-medium text-gray-900 mb-3 flex items-center gap-2">
+                                                <Truck className="h-4 w-4 text-blue-600" />
+                                                Shipping & Tracking
+                                            </h4>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                {order.carrier && (
+                                                    <div>
+                                                        <p className="text-xs text-gray-500 mb-1">Carrier</p>
+                                                        <p className="text-sm font-medium text-gray-900">{order.carrier}</p>
+                                                    </div>
+                                                )}
+                                                {order.tracking_number && (
+                                                    <div>
+                                                        <p className="text-xs text-gray-500 mb-1">Tracking Number</p>
+                                                        <p className="text-sm font-medium text-gray-900 font-mono">{order.tracking_number}</p>
+                                                    </div>
+                                                )}
+                                                {order.estimated_delivery && (
+                                                    <div>
+                                                        <p className="text-xs text-gray-500 mb-1">Estimated Delivery</p>
+                                                        <p className="text-sm font-medium text-gray-900">
+                                                            {new Date(order.estimated_delivery).toLocaleDateString('en-US', {
+                                                                weekday: 'short',
+                                                                month: 'short',
+                                                                day: 'numeric'
+                                                            })}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                                {order.shipped_at && (
+                                                    <div>
+                                                        <p className="text-xs text-gray-500 mb-1">Shipped On</p>
+                                                        <p className="text-sm font-medium text-gray-900">
+                                                            {new Date(order.shipped_at).toLocaleDateString('en-US', {
+                                                                month: 'short',
+                                                                day: 'numeric',
+                                                                year: 'numeric'
+                                                            })}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                                {order.delivered_at && (
+                                                    <div>
+                                                        <p className="text-xs text-gray-500 mb-1">Delivered On</p>
+                                                        <p className="text-sm font-medium text-green-700">
+                                                            {new Date(order.delivered_at).toLocaleDateString('en-US', {
+                                                                month: 'short',
+                                                                day: 'numeric',
+                                                                year: 'numeric'
+                                                            })}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {order.tracking_url && (
+                                                <a
+                                                    href={order.tracking_url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="mt-3 inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-medium"
+                                                >
+                                                    Track Package <ExternalLink className="h-3 w-3" />
+                                                </a>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Shipping Address */}
+                                    {order.shipping_address && (
+                                        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                                            <h4 className="text-sm font-medium text-gray-900 mb-2 flex items-center gap-2">
+                                                <MapPin className="h-4 w-4 text-gray-500" />
+                                                Shipping Address
+                                            </h4>
+                                            <p className="text-sm text-gray-600">{order.shipping_address}</p>
+                                        </div>
+                                    )}
+
                                     <h4 className="text-sm font-medium text-gray-900 mb-4 flex items-center gap-2">
                                         <Package className="h-4 w-4" />
                                         Items

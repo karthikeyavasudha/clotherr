@@ -5,16 +5,21 @@ import {
     X,
     ShoppingCart,
     AlertTriangle,
-    Package
+    Package,
+    Truck,
+    Save,
+    ExternalLink
 } from 'lucide-react';
 import {
     fetchAdminOrders,
     fetchOrderDetails,
-    updateOrderStatus
+    updateOrderStatus,
+    updateOrderShipping,
+    fetchOrderStatuses
 } from '../../services/adminApi';
 import AdminLayout from '../../components/admin/AdminLayout';
 
-const STATUS_OPTIONS = ['pending', 'paid', 'shipped', 'delivered', 'cancelled'];
+const CARRIERS = ['DTDC', 'Blue Dart', 'Delhivery', 'FedEx', 'India Post', 'Ecom Express', 'Xpressbees', 'Other'];
 
 const Orders = () => {
     const [orders, setOrders] = useState([]);
@@ -25,10 +30,41 @@ const Orders = () => {
     const [orderDetails, setOrderDetails] = useState(null);
     const [loadingDetails, setLoadingDetails] = useState(false);
     const [updatingStatus, setUpdatingStatus] = useState(null);
+    const [savingShipping, setSavingShipping] = useState(false);
+    const [statusOptions, setStatusOptions] = useState([]);
+    const [shippingForm, setShippingForm] = useState({
+        tracking_number: '',
+        carrier: '',
+        tracking_url: '',
+        estimated_delivery: ''
+    });
+
+    useEffect(() => {
+        loadStatusOptions();
+    }, []);
 
     useEffect(() => {
         loadOrders();
     }, [statusFilter]);
+
+    const loadStatusOptions = async () => {
+        try {
+            const statuses = await fetchOrderStatuses();
+            setStatusOptions(statuses);
+        } catch (err) {
+            console.error('Failed to load status options:', err);
+            // Fallback to default statuses
+            setStatusOptions([
+                { status_code: 'pending', display_name: 'Pending' },
+                { status_code: 'paid', display_name: 'Paid' },
+                { status_code: 'shipped', display_name: 'Shipped' },
+                { status_code: 'in_transit', display_name: 'In Transit' },
+                { status_code: 'out_for_delivery', display_name: 'Out for Delivery' },
+                { status_code: 'delivered', display_name: 'Delivered' },
+                { status_code: 'cancelled', display_name: 'Cancelled' }
+            ]);
+        }
+    };
 
     const loadOrders = async () => {
         try {
@@ -48,10 +84,32 @@ const Orders = () => {
         try {
             const details = await fetchOrderDetails(orderId);
             setOrderDetails(details);
+            // Initialize shipping form with current values
+            setShippingForm({
+                tracking_number: details.tracking_number || '',
+                carrier: details.carrier || '',
+                tracking_url: details.tracking_url || '',
+                estimated_delivery: details.estimated_delivery || ''
+            });
         } catch (err) {
             setError(err.message);
         } finally {
             setLoadingDetails(false);
+        }
+    };
+
+    const handleSaveShipping = async () => {
+        if (!orderDetails) return;
+        setSavingShipping(true);
+        try {
+            const updated = await updateOrderShipping(orderDetails.id, shippingForm);
+            setOrderDetails({ ...orderDetails, ...updated });
+            // Update in orders list too
+            setOrders(orders.map(o => o.id === orderDetails.id ? { ...o, ...updated } : o));
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setSavingShipping(false);
         }
     };
 
@@ -109,16 +167,16 @@ const Orders = () => {
                     >
                         All
                     </button>
-                    {STATUS_OPTIONS.map((status) => (
+                    {statusOptions.map((status) => (
                         <button
-                            key={status}
-                            onClick={() => setStatusFilter(status)}
-                            className={`px-4 py-2 rounded-xl text-sm font-medium capitalize transition-colors ${statusFilter === status
+                            key={status.status_code}
+                            onClick={() => setStatusFilter(status.status_code)}
+                            className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${statusFilter === status.status_code
                                     ? 'bg-black text-white'
                                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                 }`}
                         >
-                            {status}
+                            {status.display_name}
                         </button>
                     ))}
                 </div>
@@ -186,11 +244,11 @@ const Orders = () => {
                                                     value={order.status}
                                                     onChange={(e) => handleStatusChange(order.id, e.target.value)}
                                                     disabled={updatingStatus === order.id}
-                                                    className={`px-3 py-1.5 rounded-lg text-sm font-medium capitalize border cursor-pointer focus:outline-none focus:ring-2 focus:ring-black ${getStatusColor(order.status)}`}
+                                                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border cursor-pointer focus:outline-none focus:ring-2 focus:ring-black ${getStatusColor(order.status)}`}
                                                 >
-                                                    {STATUS_OPTIONS.map((status) => (
-                                                        <option key={status} value={status} className="bg-white text-gray-900">
-                                                            {status}
+                                                    {statusOptions.map((status) => (
+                                                        <option key={status.status_code} value={status.status_code} className="bg-white text-gray-900">
+                                                            {status.display_name}
                                                         </option>
                                                     ))}
                                                 </select>
@@ -285,6 +343,88 @@ const Orders = () => {
                                         {orderDetails.shipping_address}
                                     </p>
                                 </div>
+
+                                {/* Shipping & Tracking - Only show when order is shipped or beyond */}
+                                {['shipped', 'in_transit', 'out_for_delivery', 'delivered'].includes(orderDetails.status) ? (
+                                    <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h3 className="text-gray-900 font-semibold flex items-center gap-2">
+                                                <Truck className="w-4 h-4 text-blue-600" />
+                                                Shipping & Tracking
+                                            </h3>
+                                            <button
+                                                onClick={handleSaveShipping}
+                                                disabled={savingShipping}
+                                                className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                                            >
+                                                <Save className="w-4 h-4" />
+                                                {savingShipping ? 'Saving...' : 'Save'}
+                                            </button>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Carrier</label>
+                                                <select
+                                                    value={shippingForm.carrier}
+                                                    onChange={(e) => setShippingForm({...shippingForm, carrier: e.target.value})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                                                >
+                                                    <option value="">Select Carrier</option>
+                                                    {CARRIERS.map(c => (
+                                                        <option key={c} value={c}>{c}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Tracking Number</label>
+                                                <input
+                                                    type="text"
+                                                    value={shippingForm.tracking_number}
+                                                    onChange={(e) => setShippingForm({...shippingForm, tracking_number: e.target.value})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                                                    placeholder="Enter tracking number"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Est. Delivery</label>
+                                                <input
+                                                    type="date"
+                                                    value={shippingForm.estimated_delivery}
+                                                    onChange={(e) => setShippingForm({...shippingForm, estimated_delivery: e.target.value})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Tracking URL</label>
+                                                <input
+                                                    type="url"
+                                                    value={shippingForm.tracking_url}
+                                                    onChange={(e) => setShippingForm({...shippingForm, tracking_url: e.target.value})}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                                                    placeholder="https://..."
+                                                />
+                                            </div>
+                                        </div>
+                                        {orderDetails.tracking_url && (
+                                            <a
+                                                href={orderDetails.tracking_url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="mt-3 inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-medium"
+                                            >
+                                                View Tracking <ExternalLink className="w-3 h-3" />
+                                            </a>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                                        <h3 className="text-gray-500 font-medium flex items-center gap-2">
+                                            <Truck className="w-4 h-4" />
+                                            Shipping & Tracking
+                                        </h3>
+                                        <p className="text-gray-400 text-sm mt-2">Shipping details can be added once the order status is changed to "Shipped"</p>
+                                    </div>
+                                )}
 
                                 {/* Order Items */}
                                 <div>
