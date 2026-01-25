@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
+from fastapi import Header, HTTPException
 from app.core.config import settings
+from app.services.supabase import supabase
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """Create a JWT access token."""
@@ -22,3 +24,25 @@ def verify_token(token: str):
         return payload
     except JWTError:
         return None
+
+def get_current_user(authorization: str = Header(None)):
+    """Get the current authenticated user from the JWT token."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    token = authorization.split(" ")[1]
+    payload = verify_token(token)
+    
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token payload")
+    
+    # Get user from database
+    result = supabase.table("users").select("*").eq("id", user_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=401, detail="User not found")
+    
+    return result.data[0]

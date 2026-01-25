@@ -9,12 +9,6 @@ class UserSignup(BaseModel):
     password: str
     full_name: str
     phone: str
-    address_line1: str
-    address_line2: str | None = None
-    city: str
-    state: str
-    postal_code: str
-    country: str
 
 class UserUpdate(BaseModel):
     full_name: str | None = None

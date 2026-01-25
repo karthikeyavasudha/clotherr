@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { createOrder, createRazorpayOrder, verifyRazorpayPayment, fetchPaymentSettings, validateDiscountCode, useDiscountCode, fetchAvailableDiscounts } from '../services/api';
-import { CheckCircle, MapPin, CreditCard, Package, ArrowLeft, AlertCircle, Loader, Tag, X, Percent } from 'lucide-react';
+import { createOrder, createRazorpayOrder, verifyRazorpayPayment, fetchPaymentSettings, validateDiscountCode, useDiscountCode, fetchAvailableDiscounts, fetchUserAddresses } from '../services/api';
+import { CheckCircle, MapPin, CreditCard, Package, ArrowLeft, AlertCircle, Loader, Tag, X, Percent, Plus, Home, Building, Check } from 'lucide-react';
 
 const Checkout = () => {
     const navigate = useNavigate();
@@ -45,9 +45,41 @@ const Checkout = () => {
         return appliedDiscount?.discount_amount || 0;
     };
 
+    // Check if a specific charge should be waived
+    const isChargeWaived = (chargeKey) => {
+        if (!appliedDiscount?.waive_extra_charges) return false;
+        const waiveList = appliedDiscount?.waive_charges_list || [];
+        // If waive_charges_list is empty but waive_extra_charges is true, waive all (backward compatibility)
+        if (waiveList.length === 0) return true;
+        return waiveList.includes(chargeKey);
+    };
+
+    // Get adjusted extra charges total (accounting for waived charges)
+    const getAdjustedExtraChargesTotal = () => {
+        let total = 0;
+        
+        // COD charge
+        if (paymentMethod === 'cod' && paymentSettings?.cod_extra_charge_enabled && paymentSettings?.cod_extra_charge > 0) {
+            if (!isChargeWaived('cod_charge')) {
+                total += paymentSettings.cod_extra_charge;
+            }
+        }
+        
+        // Custom extra charges
+        if (paymentSettings?.extra_charges) {
+            paymentSettings.extra_charges.forEach(charge => {
+                if (!isChargeWaived(charge.key)) {
+                    total += charge.amount || 0;
+                }
+            });
+        }
+        
+        return total;
+    };
+
     // Get final total including extra charges minus discount
     const getFinalTotal = () => {
-        return Math.max(0, getCartTotal() + getExtraChargesTotal() - getDiscountAmount());
+        return Math.max(0, getCartTotal() + getAdjustedExtraChargesTotal() - getDiscountAmount());
     };
 
     // Handle applying discount code
@@ -75,6 +107,12 @@ const Checkout = () => {
         setDiscountError('');
     };
 
+    // Saved addresses state
+    const [savedAddresses, setSavedAddresses] = useState([]);
+    const [selectedAddressId, setSelectedAddressId] = useState(null);
+    const [showAddressForm, setShowAddressForm] = useState(false);
+    const [addressesLoading, setAddressesLoading] = useState(true);
+
     // Address form state
     const [address, setAddress] = useState({
         full_name: user?.full_name || '',
@@ -86,6 +124,72 @@ const Checkout = () => {
         postal_code: user?.postal_code || '',
         country: user?.country || ''
     });
+
+    // Load saved addresses
+    useEffect(() => {
+        const loadAddresses = async () => {
+            if (!token) {
+                setAddressesLoading(false);
+                return;
+            }
+            try {
+                const addresses = await fetchUserAddresses(token);
+                setSavedAddresses(addresses);
+                // Select default address if available
+                const defaultAddr = addresses.find(a => a.is_default);
+                if (defaultAddr) {
+                    setSelectedAddressId(defaultAddr.id);
+                    setAddress({
+                        full_name: defaultAddr.full_name,
+                        phone: defaultAddr.phone,
+                        address_line1: defaultAddr.address_line1,
+                        address_line2: defaultAddr.address_line2 || '',
+                        city: defaultAddr.city,
+                        state: defaultAddr.state,
+                        postal_code: defaultAddr.postal_code,
+                        country: defaultAddr.country || 'India'
+                    });
+                } else if (addresses.length === 0) {
+                    setShowAddressForm(true);
+                }
+            } catch (err) {
+                console.error('Failed to load addresses:', err);
+                setShowAddressForm(true);
+            } finally {
+                setAddressesLoading(false);
+            }
+        };
+        loadAddresses();
+    }, [token]);
+
+    // Handle selecting a saved address
+    const handleSelectAddress = (addr) => {
+        setSelectedAddressId(addr.id);
+        setAddress({
+            full_name: addr.full_name,
+            phone: addr.phone,
+            address_line1: addr.address_line1,
+            address_line2: addr.address_line2 || '',
+            city: addr.city,
+            state: addr.state,
+            postal_code: addr.postal_code,
+            country: addr.country || 'India'
+        });
+        setShowAddressForm(false);
+    };
+
+    // Get label icon
+    const getLabelIcon = (label) => {
+        switch (label?.toLowerCase()) {
+            case 'home':
+                return <Home className="w-4 h-4" />;
+            case 'work':
+            case 'office':
+                return <Building className="w-4 h-4" />;
+            default:
+                return <MapPin className="w-4 h-4" />;
+        }
+    };
 
     // Fetch payment settings on mount
     useEffect(() => {
@@ -410,100 +514,197 @@ const Checkout = () => {
                                     </div>
                                 </div>
 
-                                {/* Shipping Address Form */}
+                                {/* Shipping Address Section */}
                                 <div className="bg-white rounded-lg shadow p-6">
                                     <h2 className="text-2xl font-bold mb-6">Shipping Address</h2>
-                                    <div className="space-y-4">
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                                                <input
-                                                    type="text"
-                                                    name="full_name"
-                                                    value={address.full_name}
-                                                    onChange={handleAddressChange}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-black"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                                                <input
-                                                    type="tel"
-                                                    name="phone"
-                                                    value={address.phone}
-                                                    onChange={handleAddressChange}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-black"
-                                                />
-                                            </div>
+                                    
+                                    {addressesLoading ? (
+                                        <div className="text-center py-8">
+                                            <div className="animate-spin h-8 w-8 border-2 border-black border-t-transparent rounded-full mx-auto"></div>
+                                            <p className="mt-2 text-gray-600">Loading addresses...</p>
                                         </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 1</label>
-                                            <input
-                                                type="text"
-                                                name="address_line1"
-                                                value={address.address_line1}
-                                                onChange={handleAddressChange}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-black"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 2 (Optional)</label>
-                                            <input
-                                                type="text"
-                                                name="address_line2"
-                                                value={address.address_line2}
-                                                onChange={handleAddressChange}
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-black"
-                                            />
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
-                                                <input
-                                                    type="text"
-                                                    name="city"
-                                                    value={address.city}
-                                                    onChange={handleAddressChange}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-black"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
-                                                <input
-                                                    type="text"
-                                                    name="state"
-                                                    value={address.state}
-                                                    onChange={handleAddressChange}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-black"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">Postal Code</label>
-                                                <input
-                                                    type="text"
-                                                    name="postal_code"
-                                                    value={address.postal_code}
-                                                    onChange={handleAddressChange}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-black"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
-                                                <input
-                                                    type="text"
-                                                    name="country"
-                                                    value={address.country}
-                                                    onChange={handleAddressChange}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-black"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
+                                    ) : (
+                                        <>
+                                            {/* Saved Addresses */}
+                                            {savedAddresses.length > 0 && !showAddressForm && (
+                                                <div className="space-y-3 mb-4">
+                                                    {savedAddresses.map((addr) => (
+                                                        <div
+                                                            key={addr.id}
+                                                            onClick={() => handleSelectAddress(addr)}
+                                                            className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                                                                selectedAddressId === addr.id
+                                                                    ? 'border-black bg-gray-50'
+                                                                    : 'border-gray-200 hover:border-gray-400'
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-start justify-between">
+                                                                <div className="flex items-start space-x-3">
+                                                                    <div className={`p-2 rounded-full ${
+                                                                        selectedAddressId === addr.id ? 'bg-black text-white' : 'bg-gray-100 text-gray-600'
+                                                                    }`}>
+                                                                        {getLabelIcon(addr.label)}
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="flex items-center space-x-2">
+                                                                            <span className="font-semibold">{addr.label || 'Address'}</span>
+                                                                            {addr.is_default && (
+                                                                                <span className="text-xs bg-black text-white px-2 py-0.5 rounded-full">Default</span>
+                                                                            )}
+                                                                        </div>
+                                                                        <p className="text-sm font-medium mt-1">{addr.full_name}</p>
+                                                                        <p className="text-sm text-gray-600">
+                                                                            {addr.address_line1}
+                                                                            {addr.address_line2 && `, ${addr.address_line2}`}
+                                                                        </p>
+                                                                        <p className="text-sm text-gray-600">
+                                                                            {addr.city}, {addr.state} {addr.postal_code}
+                                                                        </p>
+                                                                        <p className="text-sm text-gray-600">{addr.phone}</p>
+                                                                    </div>
+                                                                </div>
+                                                                {selectedAddressId === addr.id && (
+                                                                    <Check className="w-5 h-5 text-black" />
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                    
+                                                    {/* Add New Address Button */}
+                                                    <button
+                                                        onClick={() => {
+                                                            setShowAddressForm(true);
+                                                            setSelectedAddressId(null);
+                                                            setAddress({
+                                                                full_name: '',
+                                                                phone: '',
+                                                                address_line1: '',
+                                                                address_line2: '',
+                                                                city: '',
+                                                                state: '',
+                                                                postal_code: '',
+                                                                country: 'India'
+                                                            });
+                                                        }}
+                                                        className="w-full p-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-gray-400 hover:text-gray-800 flex items-center justify-center space-x-2"
+                                                    >
+                                                        <Plus className="w-5 h-5" />
+                                                        <span>Use a different address</span>
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            {/* Address Form */}
+                                            {(showAddressForm || savedAddresses.length === 0) && (
+                                                <div className="space-y-4">
+                                                    {savedAddresses.length > 0 && (
+                                                        <button
+                                                            onClick={() => {
+                                                                setShowAddressForm(false);
+                                                                // Re-select default address
+                                                                const defaultAddr = savedAddresses.find(a => a.is_default) || savedAddresses[0];
+                                                                if (defaultAddr) handleSelectAddress(defaultAddr);
+                                                            }}
+                                                            className="text-sm text-blue-600 hover:text-blue-800 mb-2"
+                                                        >
+                                                            ← Back to saved addresses
+                                                        </button>
+                                                    )}
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                                                            <input
+                                                                type="text"
+                                                                name="full_name"
+                                                                value={address.full_name}
+                                                                onChange={handleAddressChange}
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-black"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                                                            <input
+                                                                type="tel"
+                                                                name="phone"
+                                                                value={address.phone}
+                                                                onChange={handleAddressChange}
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-black"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 1</label>
+                                                        <input
+                                                            type="text"
+                                                            name="address_line1"
+                                                            value={address.address_line1}
+                                                            onChange={handleAddressChange}
+                                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-black"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 2 (Optional)</label>
+                                                        <input
+                                                            type="text"
+                                                            name="address_line2"
+                                                            value={address.address_line2}
+                                                            onChange={handleAddressChange}
+                                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-black"
+                                                        />
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                                                            <input
+                                                                type="text"
+                                                                name="city"
+                                                                value={address.city}
+                                                                onChange={handleAddressChange}
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-black"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                                                            <input
+                                                                type="text"
+                                                                name="state"
+                                                                value={address.state}
+                                                                onChange={handleAddressChange}
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-black"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-gray-700 mb-1">Postal Code</label>
+                                                            <input
+                                                                type="text"
+                                                                name="postal_code"
+                                                                value={address.postal_code}
+                                                                onChange={handleAddressChange}
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-black"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+                                                            <input
+                                                                type="text"
+                                                                name="country"
+                                                                value={address.country}
+                                                                onChange={handleAddressChange}
+                                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-black"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+                                    
                                     <button
                                         onClick={() => setCurrentStep(3)}
-                                        className="w-full mt-6 bg-black text-white py-3 rounded-lg hover:bg-gray-800"
+                                        disabled={!address.full_name || !address.phone || !address.address_line1 || !address.city || !address.state || !address.postal_code}
+                                        className="w-full mt-6 bg-black text-white py-3 rounded-lg hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed"
                                     >
                                         Continue to Payment
                                     </button>
@@ -694,7 +895,12 @@ const Checkout = () => {
                                 {paymentMethod === 'cod' && paymentSettings?.cod_extra_charge_enabled && paymentSettings?.cod_extra_charge > 0 && (
                                     <div className="flex justify-between text-sm text-gray-600">
                                         <span>COD Charge</span>
-                                        <span>₹{paymentSettings.cod_extra_charge.toFixed(2)}</span>
+                                        <div className="flex items-center gap-1">
+                                            <span className={isChargeWaived('cod_charge') ? 'line-through text-gray-400' : ''}>
+                                                ₹{paymentSettings.cod_extra_charge.toFixed(2)}
+                                            </span>
+                                            {isChargeWaived('cod_charge') && <span className="text-green-600">FREE</span>}
+                                        </div>
                                     </div>
                                 )}
                                 
@@ -702,7 +908,12 @@ const Checkout = () => {
                                 {paymentSettings?.extra_charges?.map((charge) => (
                                     <div key={charge.key} className="flex justify-between text-sm text-gray-600">
                                         <span>{charge.name}</span>
-                                        <span>₹{charge.amount.toFixed(2)}</span>
+                                        <div className="flex items-center gap-1">
+                                            <span className={isChargeWaived(charge.key) ? 'line-through text-gray-400' : ''}>
+                                                ₹{charge.amount.toFixed(2)}
+                                            </span>
+                                            {isChargeWaived(charge.key) && <span className="text-green-600">FREE</span>}
+                                        </div>
                                     </div>
                                 ))}
                                 
@@ -712,6 +923,9 @@ const Checkout = () => {
                                         <div className="flex items-center gap-1">
                                             <Tag className="w-4 h-4" />
                                             <span>{appliedDiscount.code}</span>
+                                            {appliedDiscount.type === 'waive_charges' && (
+                                                <span className="text-xs bg-green-100 text-green-700 px-1 rounded">Free Charges</span>
+                                            )}
                                             <button 
                                                 onClick={removeDiscount}
                                                 className="ml-1 text-gray-400 hover:text-red-500"
@@ -719,7 +933,9 @@ const Checkout = () => {
                                                 <X className="w-3 h-3" />
                                             </button>
                                         </div>
-                                        <span>-₹{appliedDiscount.discount_amount.toFixed(2)}</span>
+                                        {appliedDiscount.type !== 'waive_charges' && (
+                                            <span>-₹{appliedDiscount.discount_amount.toFixed(2)}</span>
+                                        )}
                                     </div>
                                 )}
                                 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Tag, Plus, Trash2, Edit2, X, Check, AlertTriangle, Percent, DollarSign } from 'lucide-react';
-import { fetchDiscounts, createDiscount, updateDiscount, deleteDiscount } from '../../services/adminApi';
+import { fetchDiscounts, createDiscount, updateDiscount, deleteDiscount, fetchAdminSettings } from '../../services/adminApi';
 import AdminLayout from '../../components/admin/AdminLayout';
 
 const DiscountsPage = () => {
@@ -10,6 +10,7 @@ const DiscountsPage = () => {
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [saving, setSaving] = useState(false);
+    const [availableCharges, setAvailableCharges] = useState([]);
     
     const [formData, setFormData] = useState({
         code: '',
@@ -21,12 +22,36 @@ const DiscountsPage = () => {
         per_user_limit: '',
         expiry_date: '',
         description: '',
-        is_active: true
+        is_active: true,
+        waive_extra_charges: false,
+        waive_charges_list: []
     });
 
     useEffect(() => {
         loadDiscounts();
+        loadAvailableCharges();
     }, []);
+    
+    const loadAvailableCharges = async () => {
+        try {
+            const settings = await fetchAdminSettings();
+            const charges = [];
+            
+            // Add all enabled extra charges from settings
+            settings.forEach(setting => {
+                // Check if it's an extra charge setting and is enabled
+                if (setting.enabled && (setting.is_custom || setting.key.includes('charge') || setting.key.includes('fee'))) {
+                    charges.push({ 
+                        key: setting.key, 
+                        name: setting.key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) 
+                    });
+                }
+            });
+            setAvailableCharges(charges);
+        } catch (err) {
+            console.error('Failed to load available charges:', err);
+        }
+    };
 
     const loadDiscounts = async () => {
         try {
@@ -51,7 +76,9 @@ const DiscountsPage = () => {
             per_user_limit: '',
             expiry_date: '',
             description: '',
-            is_active: true
+            is_active: true,
+            waive_extra_charges: false,
+            waive_charges_list: []
         });
         setEditingId(null);
         setShowForm(false);
@@ -61,14 +88,16 @@ const DiscountsPage = () => {
         setFormData({
             code: discount.code,
             type: discount.type,
-            value: discount.value,
+            value: discount.value || '',
             min_order_amount: discount.min_order_amount || '',
             max_discount: discount.max_discount || '',
             usage_limit: discount.usage_limit || '',
             per_user_limit: discount.per_user_limit || '',
             expiry_date: discount.expiry_date ? discount.expiry_date.split('T')[0] : '',
             description: discount.description || '',
-            is_active: discount.is_active
+            is_active: discount.is_active,
+            waive_extra_charges: discount.waive_extra_charges || false,
+            waive_charges_list: discount.waive_charges_list || []
         });
         setEditingId(discount.id);
         setShowForm(true);
@@ -83,14 +112,16 @@ const DiscountsPage = () => {
             const data = {
                 code: formData.code,
                 type: formData.type,
-                value: parseFloat(formData.value),
+                value: formData.type === 'waive_charges' ? 0 : parseFloat(formData.value || 0),
                 min_order_amount: formData.min_order_amount ? parseFloat(formData.min_order_amount) : 0,
                 max_discount: formData.max_discount ? parseFloat(formData.max_discount) : null,
                 usage_limit: formData.usage_limit ? parseInt(formData.usage_limit) : null,
                 per_user_limit: formData.per_user_limit ? parseInt(formData.per_user_limit) : null,
                 expiry_date: formData.expiry_date || null,
                 description: formData.description || null,
-                is_active: formData.is_active
+                is_active: formData.is_active,
+                waive_extra_charges: formData.type === 'waive_charges' ? true : formData.waive_extra_charges,
+                waive_charges_list: formData.type === 'waive_charges' ? formData.waive_charges_list : []
             };
 
             if (editingId) {
@@ -213,14 +244,16 @@ const DiscountsPage = () => {
                                     </label>
                                     <select
                                         value={formData.type}
-                                        onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                                        onChange={(e) => setFormData({ ...formData, type: e.target.value, waive_charges_list: e.target.value === 'waive_charges' ? formData.waive_charges_list : [] })}
                                         className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
                                     >
                                         <option value="percentage">Percentage (%)</option>
                                         <option value="fixed">Fixed Amount (₹)</option>
+                                        <option value="waive_charges">Waive Extra Charges</option>
                                     </select>
                                 </div>
                                 
+                                {formData.type !== 'waive_charges' && (
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                         Value * {formData.type === 'percentage' ? '(%)' : '(₹)'}
@@ -237,6 +270,38 @@ const DiscountsPage = () => {
                                         required
                                     />
                                 </div>
+                                )}
+                                
+                                {formData.type === 'waive_charges' && (
+                                    <div className="md:col-span-2">
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Select Charges to Waive *
+                                        </label>
+                                        <div className="space-y-2 p-3 border border-gray-200 rounded-lg bg-gray-50">
+                                            {availableCharges.length === 0 ? (
+                                                <p className="text-sm text-gray-500">No extra charges configured. Add charges in Settings first.</p>
+                                            ) : (
+                                                availableCharges.map((charge) => (
+                                                    <label key={charge.key} className="flex items-center gap-2 cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={formData.waive_charges_list.includes(charge.key)}
+                                                            onChange={(e) => {
+                                                                if (e.target.checked) {
+                                                                    setFormData({ ...formData, waive_charges_list: [...formData.waive_charges_list, charge.key] });
+                                                                } else {
+                                                                    setFormData({ ...formData, waive_charges_list: formData.waive_charges_list.filter(k => k !== charge.key) });
+                                                                }
+                                                            }}
+                                                            className="w-4 h-4"
+                                                        />
+                                                        <span className="text-sm text-gray-700">{charge.name}</span>
+                                                    </label>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                                 
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -404,12 +469,17 @@ const DiscountsPage = () => {
                                                 <div className="flex items-center gap-1">
                                                     {discount.type === 'percentage' ? (
                                                         <span className="font-medium">{discount.value}%</span>
+                                                    ) : discount.type === 'waive_charges' ? (
+                                                        <span className="font-medium text-blue-600">Waive Charges</span>
                                                     ) : (
                                                         <span className="font-medium">₹{discount.value}</span>
                                                     )}
                                                 </div>
                                                 {discount.type === 'percentage' && discount.max_discount && (
                                                     <p className="text-xs text-gray-500">Max: ₹{discount.max_discount}</p>
+                                                )}
+                                                {discount.type === 'waive_charges' && discount.waive_charges_list?.length > 0 && (
+                                                    <p className="text-xs text-gray-500">{discount.waive_charges_list.length} charge(s)</p>
                                                 )}
                                             </td>
                                             <td className="px-6 py-4 text-sm text-gray-600">
