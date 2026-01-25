@@ -43,13 +43,7 @@ export const signupUser = async (userData) => {
             email: userData.email,
             password: userData.password,
             full_name: userData.full_name,
-            phone: userData.phone,
-            address_line1: userData.address_line1,
-            address_line2: userData.address_line2 || '',
-            city: userData.city,
-            state: userData.state,
-            postal_code: userData.postal_code,
-            country: userData.country
+            phone: userData.phone
         })
     });
 
@@ -191,6 +185,158 @@ export const fetchAvailableDiscounts = async () => {
     const response = await fetch(`${API_URL}/discounts/available`);
     if (!response.ok) {
         return [];
+    }
+    return response.json();
+};
+
+// Address APIs
+export const fetchUserAddresses = async (token) => {
+    const response = await fetch(`${API_URL}/addresses`, {
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to fetch addresses');
+    }
+    return response.json();
+};
+
+export const createUserAddress = async (addressData, token) => {
+    const response = await fetch(`${API_URL}/addresses`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(addressData)
+    });
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to create address');
+    }
+    return response.json();
+};
+
+export const updateUserAddress = async (addressId, addressData, token) => {
+    const response = await fetch(`${API_URL}/addresses/${addressId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(addressData)
+    });
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to update address');
+    }
+    return response.json();
+};
+
+export const deleteUserAddress = async (addressId, token) => {
+    const response = await fetch(`${API_URL}/addresses/${addressId}`, {
+        method: 'DELETE',
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to delete address');
+    }
+    return response.json();
+};
+
+export const setDefaultAddress = async (addressId, token) => {
+    const response = await fetch(`${API_URL}/addresses/${addressId}/set-default`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to set default address');
+    }
+    return response.json();
+};
+
+// Order tracking APIs
+export const getOrderDetails = async (orderId, token) => {
+    const response = await fetch(`${API_URL}/orders/${orderId}`, {
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to fetch order details');
+    }
+    return response.json();
+};
+
+export const trackOrderByNumber = async (trackingNumber) => {
+    const response = await fetch(`${API_URL}/orders/track/${trackingNumber}`);
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Order not found');
+    }
+    return response.json();
+};
+
+// Admin order management APIs
+export const fetchAllOrders = async (token) => {
+    const response = await fetch(`${API_URL}/orders/admin/all`, {
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to fetch orders');
+    }
+    return response.json();
+};
+
+export const updateOrderStatus = async (orderId, status, token) => {
+    const response = await fetch(`${API_URL}/orders/admin/${orderId}/status`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status })
+    });
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to update order status');
+    }
+    return response.json();
+};
+
+export const updateOrderShipping = async (orderId, shippingData, token) => {
+    const response = await fetch(`${API_URL}/orders/admin/${orderId}/shipping`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(shippingData)
+    });
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to update shipping info');
+    }
+    return response.json();
+};
+
+// Fetch order statuses from database (public endpoint)
+export const fetchOrderStatuses = async () => {
+    const response = await fetch(`${API_URL}/orders/statuses`);
+    if (!response.ok) {
+        throw new Error('Failed to fetch order statuses');
     }
     return response.json();
 };

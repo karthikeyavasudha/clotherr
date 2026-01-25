@@ -43,13 +43,7 @@ def signup(user: UserSignup):
             "email": user.email,
             "password_hash": password_hash,
             "full_name": user.full_name,
-            "phone": user.phone,
-            "address_line1": user.address_line1,
-            "address_line2": user.address_line2,
-            "city": user.city,
-            "state": user.state,
-            "postal_code": user.postal_code,
-            "country": user.country
+            "phone": user.phone
         }
         
         result = supabase.table("users").insert(user_data).execute()
@@ -69,12 +63,6 @@ def signup(user: UserSignup):
                 "email": user.email,
                 "full_name": user.full_name,
                 "phone": user.phone,
-                "address_line1": user.address_line1,
-                "address_line2": user.address_line2,
-                "city": user.city,
-                "state": user.state,
-                "postal_code": user.postal_code,
-                "country": user.country,
                 "created_at": result.data[0].get("created_at"),
                 "updated_at": result.data[0].get("updated_at")
             }

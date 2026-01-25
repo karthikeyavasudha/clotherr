@@ -149,6 +149,20 @@ export const updateOrderStatus = async (orderId, status) => {
     return response.json();
 };
 
+export const updateOrderShipping = async (orderId, shippingData) => {
+    const response = await fetch(`${API_BASE_URL}/api/v1/orders/admin/${orderId}/shipping`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(shippingData)
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to update shipping info');
+    }
+    return response.json();
+};
+
 // Users
 export const fetchAdminUsers = async (skip = 0, limit = 50, search = '') => {
     let url = `${API_URL}/users?skip=${skip}&limit=${limit}`;
@@ -293,6 +307,19 @@ export const deleteDiscount = async (discountId) => {
     if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.detail || 'Failed to delete discount');
+    }
+    return response.json();
+};
+
+// Fetch order statuses from database
+export const fetchOrderStatuses = async () => {
+    const response = await fetch(`${API_URL}/order-statuses`, {
+        headers: getAuthHeaders()
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to fetch order statuses');
     }
     return response.json();
 };

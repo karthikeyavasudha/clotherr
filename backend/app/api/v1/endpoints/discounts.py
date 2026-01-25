@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime
 from app.services.supabase import supabase, supabase_admin
@@ -9,8 +9,8 @@ router = APIRouter()
 
 class CreateDiscount(BaseModel):
     code: str
-    type: str  # 'percentage' or 'fixed'
-    value: float
+    type: str  # 'percentage', 'fixed', or 'waive_charges'
+    value: Optional[float] = 0
     min_order_amount: Optional[float] = 0
     max_discount: Optional[float] = None
     usage_limit: Optional[int] = None
@@ -18,6 +18,8 @@ class CreateDiscount(BaseModel):
     expiry_date: Optional[str] = None
     description: Optional[str] = None
     is_active: bool = True
+    waive_extra_charges: bool = False
+    waive_charges_list: Optional[List[str]] = []
 
 class UpdateDiscount(BaseModel):
     code: Optional[str] = None
@@ -30,6 +32,8 @@ class UpdateDiscount(BaseModel):
     expiry_date: Optional[str] = None
     description: Optional[str] = None
     is_active: Optional[bool] = None
+    waive_extra_charges: Optional[bool] = None
+    waive_charges_list: Optional[List[str]] = None
 
 class ValidateDiscount(BaseModel):
     code: str
@@ -75,12 +79,17 @@ def create_discount(discount: CreateDiscount, admin = Depends(get_admin_user)):
     """Create a new discount code."""
     try:
         # Validate type
-        if discount.type not in ['percentage', 'fixed']:
-            raise HTTPException(status_code=400, detail="Type must be 'percentage' or 'fixed'")
+        if discount.type not in ['percentage', 'fixed', 'waive_charges']:
+            raise HTTPException(status_code=400, detail="Type must be 'percentage', 'fixed', or 'waive_charges'")
         
         # Validate percentage value
         if discount.type == 'percentage' and (discount.value < 0 or discount.value > 100):
             raise HTTPException(status_code=400, detail="Percentage must be between 0 and 100")
+        
+        # For waive_charges type, value should be 0 and waive_extra_charges should be True
+        if discount.type == 'waive_charges':
+            discount.value = 0
+            discount.waive_extra_charges = True
         
         # Check if code already exists
         existing = supabase_admin.table("discounts").select("id").eq("code", discount.code.upper()).execute()
@@ -90,14 +99,16 @@ def create_discount(discount: CreateDiscount, admin = Depends(get_admin_user)):
         data = {
             "code": discount.code.upper(),
             "type": discount.type,
-            "value": discount.value,
+            "value": discount.value or 0,
             "min_order_amount": discount.min_order_amount or 0,
             "max_discount": discount.max_discount,
             "usage_limit": discount.usage_limit,
             "per_user_limit": discount.per_user_limit,
             "expiry_date": discount.expiry_date,
             "description": discount.description,
-            "is_active": discount.is_active
+            "is_active": discount.is_active,
+            "waive_extra_charges": discount.waive_extra_charges,
+            "waive_charges_list": discount.waive_charges_list or []
         }
         
         response = supabase_admin.table("discounts").insert(data).execute()
@@ -126,8 +137,12 @@ def update_discount(discount_id: str, discount: UpdateDiscount, admin = Depends(
             update_data["code"] = discount.code.upper()
         if discount.type is not None:
             if discount.type not in ['percentage', 'fixed']:
-                raise HTTPException(status_code=400, detail="Type must be 'percentage' or 'fixed'")
+                raise HTTPException(status_code=400, detail="Type must be 'percentage', 'fixed', or 'waive_charges'")
             update_data["type"] = discount.type
+            # If changing to waive_charges type, set appropriate defaults
+            if discount.type == 'waive_charges':
+                update_data["value"] = 0
+                update_data["waive_extra_charges"] = True
         if discount.value is not None:
             update_data["value"] = discount.value
         if discount.min_order_amount is not None:
@@ -144,6 +159,10 @@ def update_discount(discount_id: str, discount: UpdateDiscount, admin = Depends(
             update_data["description"] = discount.description
         if discount.is_active is not None:
             update_data["is_active"] = discount.is_active
+        if discount.waive_extra_charges is not None:
+            update_data["waive_extra_charges"] = discount.waive_extra_charges
+        if discount.waive_charges_list is not None:
+            update_data["waive_charges_list"] = discount.waive_charges_list
         
         update_data["updated_at"] = "now()"
         
@@ -212,25 +231,31 @@ def validate_discount(data: ValidateDiscount):
         if data.order_amount < min_amount:
             raise HTTPException(status_code=400, detail=f"Minimum order amount of ₹{min_amount} required")
         
-        # Calculate discount
+        # Calculate discount based on type
+        discount_amount = 0
         if discount["type"] == "percentage":
             discount_amount = (data.order_amount * discount["value"]) / 100
             # Apply max discount cap if set
             if discount.get("max_discount") and discount_amount > discount["max_discount"]:
                 discount_amount = discount["max_discount"]
-        else:
+        elif discount["type"] == "fixed":
             discount_amount = discount["value"]
             # Don't exceed order amount
             if discount_amount > data.order_amount:
                 discount_amount = data.order_amount
+        elif discount["type"] == "waive_charges":
+            # No discount amount for waive_charges type, just waives selected charges
+            discount_amount = 0
         
         return {
             "valid": True,
             "code": discount["code"],
             "type": discount["type"],
-            "value": discount["value"],
+            "value": discount["value"] or 0,
             "discount_amount": round(discount_amount, 2),
-            "description": discount.get("description", "")
+            "description": discount.get("description", ""),
+            "waive_extra_charges": discount.get("waive_extra_charges", False),
+            "waive_charges_list": discount.get("waive_charges_list", []) or []
         }
     except HTTPException:
         raise

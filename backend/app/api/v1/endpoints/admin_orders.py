@@ -46,7 +46,7 @@ def get_order(order_id: str, admin = Depends(get_admin_user)):
 @router.put("/orders/{order_id}/status")
 def update_order_status(order_id: str, status_update: OrderStatusUpdate, admin = Depends(get_admin_user)):
     """Update order status."""
-    valid_statuses = ["pending", "paid", "shipped", "delivered", "cancelled"]
+    valid_statuses = ["pending", "paid", "shipped", "in_transit", "out_for_delivery", "delivered", "cancelled"]
     
     if status_update.status not in valid_statuses:
         raise HTTPException(
@@ -73,5 +73,29 @@ def update_order_status(order_id: str, status_update: OrderStatusUpdate, admin =
 
 @router.get("/order-statuses")
 def get_order_statuses(admin = Depends(get_admin_user)):
-    """Get all valid order statuses."""
-    return ["pending", "paid", "shipped", "delivered", "cancelled"]
+    """Get all valid order statuses from database."""
+    try:
+        response = supabase_admin.table("order_statuses").select("*").eq("is_active", True).order("sort_order").execute()
+        if response.data:
+            return response.data
+        # Fallback to default statuses if table doesn't exist or is empty
+        return [
+            {"status_code": "pending", "display_name": "Pending", "sort_order": 1, "icon": "📦", "color": "#f59e0b"},
+            {"status_code": "paid", "display_name": "Paid", "sort_order": 2, "icon": "💳", "color": "#10b981"},
+            {"status_code": "shipped", "display_name": "Shipped", "sort_order": 3, "icon": "🚚", "color": "#3b82f6"},
+            {"status_code": "in_transit", "display_name": "In Transit", "sort_order": 4, "icon": "✈️", "color": "#8b5cf6"},
+            {"status_code": "out_for_delivery", "display_name": "Out for Delivery", "sort_order": 5, "icon": "🛵", "color": "#ec4899"},
+            {"status_code": "delivered", "display_name": "Delivered", "sort_order": 6, "icon": "✅", "color": "#22c55e"},
+            {"status_code": "cancelled", "display_name": "Cancelled", "sort_order": 7, "icon": "❌", "color": "#ef4444"}
+        ]
+    except Exception as e:
+        # Return fallback on any error
+        return [
+            {"status_code": "pending", "display_name": "Pending", "sort_order": 1, "icon": "📦", "color": "#f59e0b"},
+            {"status_code": "paid", "display_name": "Paid", "sort_order": 2, "icon": "💳", "color": "#10b981"},
+            {"status_code": "shipped", "display_name": "Shipped", "sort_order": 3, "icon": "🚚", "color": "#3b82f6"},
+            {"status_code": "in_transit", "display_name": "In Transit", "sort_order": 4, "icon": "✈️", "color": "#8b5cf6"},
+            {"status_code": "out_for_delivery", "display_name": "Out for Delivery", "sort_order": 5, "icon": "🛵", "color": "#ec4899"},
+            {"status_code": "delivered", "display_name": "Delivered", "sort_order": 6, "icon": "✅", "color": "#22c55e"},
+            {"status_code": "cancelled", "display_name": "Cancelled", "sort_order": 7, "icon": "❌", "color": "#ef4444"}
+        ]

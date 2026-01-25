@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { updateUserProfile } from '../services/api';
-import { User, MapPin, Phone, Mail, LogOut, Calendar, Edit2, Save, X } from 'lucide-react';
+import { User, MapPin, Phone, Mail, LogOut, Calendar, Edit2, Save, X, ChevronRight } from 'lucide-react';
+import AddressManager from '../components/AddressManager';
 
 const Account = () => {
     const { user, token, setUser } = useAuth();
     const navigate = useNavigate();
     const [isEditing, setIsEditing] = useState(false);
+    const [showAddressManager, setShowAddressManager] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [formData, setFormData] = useState({
@@ -207,111 +209,28 @@ const Account = () => {
                             )}
                         </div>
 
-                        {/* Shipping Address */}
+                        {/* Saved Addresses Section */}
                         <div className="mt-8">
-                            <h3 className="text-xl font-bold text-gray-900 mb-4">Shipping Address</h3>
-                            <div className="bg-gray-50 p-6 rounded-lg">
-                                <div className="flex items-start space-x-3">
-                                    <MapPin className="h-5 w-5 text-gray-400 mt-1 flex-shrink-0" />
-                                    <div className="flex-1 space-y-4">
-                                        {/* Address Line 1 */}
-                                        <div>
-                                            <p className="text-sm font-medium text-gray-500 mb-1">Street Address</p>
-                                            {isEditing ? (
-                                                <input
-                                                    type="text"
-                                                    name="address_line1"
-                                                    value={formData.address_line1}
-                                                    onChange={handleChange}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black"
-                                                />
-                                            ) : (
-                                                <p className="text-gray-900">{user.address_line1 || 'Not provided'}</p>
-                                            )}
-                                        </div>
-
-                                        {/* Address Line 2 */}
-                                        <div>
-                                            <p className="text-sm font-medium text-gray-500 mb-1">Apartment, Suite, etc. (optional)</p>
-                                            {isEditing ? (
-                                                <input
-                                                    type="text"
-                                                    name="address_line2"
-                                                    value={formData.address_line2}
-                                                    onChange={handleChange}
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black"
-                                                />
-                                            ) : (
-                                                <p className="text-gray-900">{user.address_line2 || '-'}</p>
-                                            )}
-                                        </div>
-
-                                        {/* City & State */}
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <p className="text-sm font-medium text-gray-500 mb-1">City</p>
-                                                {isEditing ? (
-                                                    <input
-                                                        type="text"
-                                                        name="city"
-                                                        value={formData.city}
-                                                        onChange={handleChange}
-                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black"
-                                                    />
-                                                ) : (
-                                                    <p className="text-gray-900">{user.city || 'Not provided'}</p>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-medium text-gray-500 mb-1">State / Province</p>
-                                                {isEditing ? (
-                                                    <input
-                                                        type="text"
-                                                        name="state"
-                                                        value={formData.state}
-                                                        onChange={handleChange}
-                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black"
-                                                    />
-                                                ) : (
-                                                    <p className="text-gray-900">{user.state || 'Not provided'}</p>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Postal Code & Country */}
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <p className="text-sm font-medium text-gray-500 mb-1">Postal Code</p>
-                                                {isEditing ? (
-                                                    <input
-                                                        type="text"
-                                                        name="postal_code"
-                                                        value={formData.postal_code}
-                                                        onChange={handleChange}
-                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black"
-                                                    />
-                                                ) : (
-                                                    <p className="text-gray-900">{user.postal_code || 'Not provided'}</p>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-medium text-gray-500 mb-1">Country</p>
-                                                {isEditing ? (
-                                                    <input
-                                                        type="text"
-                                                        name="country"
-                                                        value={formData.country}
-                                                        onChange={handleChange}
-                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black"
-                                                    />
-                                                ) : (
-                                                    <p className="text-gray-900">{user.country || 'Not provided'}</p>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-xl font-bold text-gray-900">Saved Addresses</h3>
+                                <button
+                                    onClick={() => setShowAddressManager(!showAddressManager)}
+                                    className="flex items-center space-x-1 text-blue-600 hover:text-blue-800 font-medium text-sm"
+                                >
+                                    <span>{showAddressManager ? 'Hide' : 'Manage Addresses'}</span>
+                                    <ChevronRight className={`h-4 w-4 transition-transform ${showAddressManager ? 'rotate-90' : ''}`} />
+                                </button>
                             </div>
+                            
+                            {showAddressManager ? (
+                                <AddressManager />
+                            ) : (
+                                <div className="bg-gray-50 p-6 rounded-lg">
+                                    <p className="text-gray-600 text-sm">
+                                        Manage your delivery addresses for faster checkout. Click "Manage Addresses" to add, edit, or remove addresses.
+                                    </p>
+                                </div>
+                            )}
                         </div>
 
                         {/* Actions */}

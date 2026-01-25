@@ -1,9 +1,12 @@
 from fastapi import APIRouter, HTTPException, Header, Depends, BackgroundTasks
-from typing import List
+from typing import List, Optional
+from pydantic import BaseModel
 from app.schemas.order import Order, OrderCreate
-from app.services.supabase import supabase
+from app.services.supabase import supabase, supabase_admin
 from app.core.jwt import verify_token
 from app.core.notifications import send_order_confirmation_email
+from app.core.admin import require_admin
+from datetime import datetime
 
 router = APIRouter()
 
@@ -108,5 +111,141 @@ def read_orders(user = Depends(get_current_user)):
     try:
         response = supabase.table("orders").select("*, order_items(*, products(name, image_url))").eq("user_id", user["id"]).order("created_at", desc=True).execute()
         return response.data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Public: Get all order statuses (MUST be before /{order_id} route)
+@router.get("/statuses")
+def get_order_statuses():
+    """Get all valid order statuses from database (public)."""
+    try:
+        response = supabase.table("order_statuses").select("*").eq("is_active", True).order("sort_order").execute()
+        if response.data:
+            return response.data
+        # Fallback to default statuses if table doesn't exist or is empty
+        return [
+            {"status_code": "pending", "display_name": "Pending", "sort_order": 1, "icon": "📦", "color": "#f59e0b"},
+            {"status_code": "paid", "display_name": "Paid", "sort_order": 2, "icon": "💳", "color": "#10b981"},
+            {"status_code": "shipped", "display_name": "Shipped", "sort_order": 3, "icon": "🚚", "color": "#3b82f6"},
+            {"status_code": "in_transit", "display_name": "In Transit", "sort_order": 4, "icon": "✈️", "color": "#8b5cf6"},
+            {"status_code": "out_for_delivery", "display_name": "Out for Delivery", "sort_order": 5, "icon": "🛵", "color": "#ec4899"},
+            {"status_code": "delivered", "display_name": "Delivered", "sort_order": 6, "icon": "✅", "color": "#22c55e"},
+            {"status_code": "cancelled", "display_name": "Cancelled", "sort_order": 7, "icon": "❌", "color": "#ef4444"}
+        ]
+    except Exception as e:
+        # Return fallback on any error (e.g., table doesn't exist)
+        return [
+            {"status_code": "pending", "display_name": "Pending", "sort_order": 1, "icon": "📦", "color": "#f59e0b"},
+            {"status_code": "paid", "display_name": "Paid", "sort_order": 2, "icon": "💳", "color": "#10b981"},
+            {"status_code": "shipped", "display_name": "Shipped", "sort_order": 3, "icon": "🚚", "color": "#3b82f6"},
+            {"status_code": "in_transit", "display_name": "In Transit", "sort_order": 4, "icon": "✈️", "color": "#8b5cf6"},
+            {"status_code": "out_for_delivery", "display_name": "Out for Delivery", "sort_order": 5, "icon": "🛵", "color": "#ec4899"},
+            {"status_code": "delivered", "display_name": "Delivered", "sort_order": 6, "icon": "✅", "color": "#22c55e"},
+            {"status_code": "cancelled", "display_name": "Cancelled", "sort_order": 7, "icon": "❌", "color": "#ef4444"}
+        ]
+
+# Shipping tracking models
+class ShippingUpdate(BaseModel):
+    tracking_number: Optional[str] = None
+    carrier: Optional[str] = None
+    tracking_url: Optional[str] = None
+    shipping_status: Optional[str] = None
+    estimated_delivery: Optional[str] = None
+
+class OrderStatusUpdate(BaseModel):
+    status: str
+
+# Get single order with tracking info (for user)
+@router.get("/{order_id}")
+def get_order(order_id: str, user = Depends(get_current_user)):
+    """Get a specific order with tracking information."""
+    try:
+        response = supabase.table("orders").select("*, order_items(*, products(name, image_url))").eq("id", order_id).eq("user_id", user["id"]).execute()
+        if not response.data:
+            raise HTTPException(status_code=404, detail="Order not found")
+        return response.data[0]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Admin: Get all orders
+@router.get("/admin/all")
+def get_all_orders(admin = Depends(require_admin)):
+    """Get all orders (admin only)."""
+    try:
+        response = supabase_admin.table("orders").select("*, users(email, full_name), order_items(*, products(name, image_url))").order("created_at", desc=True).execute()
+        return response.data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Admin: Update order status
+@router.put("/admin/{order_id}/status")
+def update_order_status(order_id: str, status_update: OrderStatusUpdate, admin = Depends(require_admin)):
+    """Update order status (admin only)."""
+    try:
+        valid_statuses = ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled"]
+        if status_update.status not in valid_statuses:
+            raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
+        
+        update_data = {"status": status_update.status}
+        
+        response = supabase_admin.table("orders").update(update_data).eq("id", order_id).execute()
+        if not response.data:
+            raise HTTPException(status_code=404, detail="Order not found")
+        return response.data[0]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Admin: Update shipping tracking
+@router.put("/admin/{order_id}/shipping")
+def update_shipping(order_id: str, shipping: ShippingUpdate, admin = Depends(require_admin)):
+    """Update shipping tracking information (admin only)."""
+    try:
+        update_data = {}
+        
+        if shipping.tracking_number is not None:
+            update_data["tracking_number"] = shipping.tracking_number
+        if shipping.carrier is not None:
+            update_data["carrier"] = shipping.carrier
+        if shipping.tracking_url is not None:
+            update_data["tracking_url"] = shipping.tracking_url
+        if shipping.shipping_status is not None:
+            valid_statuses = ["pending", "processing", "shipped", "in_transit", "out_for_delivery", "delivered", "failed", "returned"]
+            if shipping.shipping_status not in valid_statuses:
+                raise HTTPException(status_code=400, detail=f"Invalid shipping status. Must be one of: {valid_statuses}")
+            update_data["shipping_status"] = shipping.shipping_status
+            
+            # Auto-set timestamps
+            if shipping.shipping_status == "shipped":
+                update_data["shipped_at"] = datetime.utcnow().isoformat()
+            elif shipping.shipping_status == "delivered":
+                update_data["delivered_at"] = datetime.utcnow().isoformat()
+                
+        if shipping.estimated_delivery is not None:
+            update_data["estimated_delivery"] = shipping.estimated_delivery
+        
+        response = supabase_admin.table("orders").update(update_data).eq("id", order_id).execute()
+        if not response.data:
+            raise HTTPException(status_code=404, detail="Order not found")
+        return response.data[0]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Public: Track order by tracking number
+@router.get("/track/{tracking_number}")
+def track_order(tracking_number: str):
+    """Track order by tracking number (public)."""
+    try:
+        response = supabase.table("orders").select("id, tracking_number, carrier, tracking_url, shipping_status, estimated_delivery, shipped_at, delivered_at, created_at").eq("tracking_number", tracking_number).execute()
+        if not response.data:
+            raise HTTPException(status_code=404, detail="Order not found with this tracking number")
+        return response.data[0]
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

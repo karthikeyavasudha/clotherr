@@ -42,3 +42,6 @@ def get_admin_user(authorization: str = Header(None)):
         raise
     except Exception as e:
         raise HTTPException(status_code=401, detail=str(e))
+
+# Alias for consistency
+require_admin = get_admin_user

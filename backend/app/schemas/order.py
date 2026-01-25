@@ -36,6 +36,14 @@ class Order(OrderBase):
     user_id: UUID
     created_at: datetime
     order_items: Optional[List[OrderItem]] = []
+    # Tracking fields
+    tracking_number: Optional[str] = None
+    carrier: Optional[str] = None
+    tracking_url: Optional[str] = None
+    shipping_status: Optional[str] = "pending"
+    estimated_delivery: Optional[str] = None
+    shipped_at: Optional[datetime] = None
+    delivered_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
